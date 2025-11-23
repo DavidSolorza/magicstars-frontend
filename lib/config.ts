@@ -45,6 +45,13 @@ export const API_ENDPOINTS = {
     ASIGNAR_PEDIDO_INDIVIDUAL: '/webhook/Asignar-Pedido-Individual',
     REASIGNAR_PEDIDOS_MENSAJERO: '/webhook/reasignar-pedidos-de-un-mensajero-a-otro',
   },
+
+  // Gestión de Inventario
+  INVENTORY: {
+    ADD_EDIT_DELETE_INVENTARIO: '/webhook/add-edit-delete-inventario',
+    ADD_DICCIONARIO: '/webhook/add-diccionario',
+    ADD_DICCIONARIO_COMBOS: '/webhook/add-diccionario-combos',
+  },
 } as const;
 
 // Configuración de servidor activo
@@ -77,6 +84,11 @@ export const API_URLS = {
   GENERAR_RUTAS: buildApiUrl(API_ENDPOINTS.ROUTES.GENERAR_RUTAS),
   ASIGNAR_PEDIDO_INDIVIDUAL: buildApiUrl(API_ENDPOINTS.ROUTES.ASIGNAR_PEDIDO_INDIVIDUAL),
   REASIGNAR_PEDIDOS_MENSAJERO: buildApiUrl(API_ENDPOINTS.ROUTES.REASIGNAR_PEDIDOS_MENSAJERO),
+
+  // Inventario
+  ADD_EDIT_DELETE_INVENTARIO: buildApiUrl(API_ENDPOINTS.INVENTORY.ADD_EDIT_DELETE_INVENTARIO),
+  ADD_DICCIONARIO: buildApiUrl(API_ENDPOINTS.INVENTORY.ADD_DICCIONARIO),
+  ADD_DICCIONARIO_COMBOS: buildApiUrl(API_ENDPOINTS.INVENTORY.ADD_DICCIONARIO_COMBOS),
 } as const;
 
 // URLs del servidor legacy (para migración gradual)
