@@ -11,7 +11,6 @@ import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
 import {
   Package,
   AlertTriangle,
@@ -25,6 +24,9 @@ import {
   ArrowUp,
   Info,
   CheckCircle2,
+  Filter,
+  Warehouse,
+  Trash2,
 } from 'lucide-react';
 import { Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -34,7 +36,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Plus, Edit } from 'lucide-react';
 
 const DEFAULT_MINIMUM_STOCK = 5;
-const DEFAULT_MAXIMUM_STOCK = 1000;
+const DEFAULT_MAXIMUM_STOCK = 100; // Límite provisional de 100
 
 // Tipo para configuraciones de alertas por producto
 type StockAlertConfig = {
@@ -43,6 +45,18 @@ type StockAlertConfig = {
 };
 
 type ProductKey = string; // Formato: "tienda|producto"
+
+type StockStatus = 'in_stock' | 'low_stock' | 'out_of_stock' | 'overstock';
+type StockFilterValue = 'all' | StockStatus;
+
+type StatusInfo = {
+  status: StockStatus;
+  label: string;
+  variant: 'default' | 'secondary' | 'destructive';
+};
+
+const normalizeStoreName = (store?: string | null) =>
+  store?.trim() && store.trim().length > 0 ? store.trim() : 'Sin tienda';
 
 // Función para generar clave única de producto
 const getProductKey = (tienda: string, producto: string): ProductKey => {
@@ -77,18 +91,6 @@ const saveAlertConfig = (key: ProductKey, config: StockAlertConfig) => {
     console.error('Error guardando configuración de alertas:', error);
   }
 };
-
-type StockStatus = 'in_stock' | 'low_stock' | 'out_of_stock' | 'overstock';
-type StockFilterValue = 'all' | StockStatus;
-
-type StatusInfo = {
-  status: StockStatus;
-  label: string;
-  variant: 'default' | 'secondary' | 'destructive';
-};
-
-const normalizeStoreName = (store?: string | null) =>
-  store?.trim() && store.trim().length > 0 ? store.trim() : 'Sin tienda';
 
 const getStatusInfo = (
   quantity: number,
@@ -126,6 +128,10 @@ export default function AdminInventoryPage() {
   // Estados para el modal de productos
   const [showProductModal, setShowProductModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<ProductoInventario | null>(null);
+  
+  // Estados para el modal de confirmación de eliminación
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [productToDelete, setProductToDelete] = useState<ProductoInventario | null>(null);
   
   // Obtener tiendas únicas
   const stores = useMemo(() => {
@@ -209,11 +215,145 @@ export default function AdminInventoryPage() {
     setShowProductModal(true);
   };
 
-  const handleSaveProduct = (productData: Omit<ProductoInventario, 'idx'>) => {
-    // Aquí deberías guardar en Supabase
-    // Por ahora solo recargamos el inventario
-    console.log('Guardar producto:', productData);
-    loadInventory();
+  const handleSaveProduct = async (productData: Omit<ProductoInventario, 'idx'>) => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      // Determinar si es nuevo o editar basado en si el producto ya existe
+      const productoExiste = inventory.some(
+        (item) => 
+          item.producto === productData.producto && 
+          normalizeStoreName(item.tienda) === normalizeStoreName(productData.tienda)
+      );
+      
+      const tipoOperacion = productoExiste ? 'editar' : 'nuevo';
+      
+      // Obtener configuración de alertas para este producto si existe
+      const productKey = getProductKey(productData.tienda, productData.producto);
+      const alertConfig = alertConfigs[productKey];
+      
+      // Preparar payload para el endpoint
+      const payload = {
+        producto: productData.producto,
+        cantidad: productData.cantidad || 0,
+        tienda: productData.tienda,
+        stock_minimo: alertConfig?.stockMinimo ?? DEFAULT_MINIMUM_STOCK,
+        stock_maximo: alertConfig?.stockMaximo ?? DEFAULT_MAXIMUM_STOCK,
+        tipo_operacion: tipoOperacion,
+        usuario: 'admin', // TODO: Obtener del contexto de autenticación
+      };
+      
+      console.log('📤 Enviando producto al endpoint:', payload);
+      
+      // Llamar al endpoint
+      const response = await fetch('/api/inventory', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+      
+      const result = await response.json();
+      
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || result.message || 'Error al guardar el producto');
+      }
+      
+      console.log('✅ Producto guardado exitosamente:', result);
+      
+      // Recargar inventario después de guardar
+      await loadInventory();
+      
+    } catch (err) {
+      console.error('❌ Error al guardar producto:', err);
+      setError(err instanceof Error ? err.message : 'Error al guardar el producto');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteProduct = (item: ProductoInventario) => {
+    setProductToDelete(item);
+    setShowDeleteModal(true);
+  };
+
+  const confirmDeleteProduct = async () => {
+    if (!productToDelete) return;
+    
+    try {
+      setLoading(true);
+      setError(null);
+      
+      // Preparar payload para eliminar
+      const payload = {
+        producto: productToDelete.producto,
+        tipo_operacion: 'eliminar',
+        usuario: 'admin', // TODO: Obtener del contexto de autenticación
+      };
+      
+      console.log('🗑️ Eliminando producto:', payload);
+      
+      // Llamar al endpoint
+      const response = await fetch('/api/inventory', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+      
+      const result = await response.json();
+      
+      if (!response.ok || !result.success) {
+        // Construir mensaje de error más detallado y amigable
+        let errorMessage = result.message || result.error || 'Error al eliminar el producto';
+        
+        // Si el error es "No item to return was found", mostrar mensaje más claro
+        if (result.details && result.details.includes('No item to return was found')) {
+          errorMessage = `El producto "${productToDelete.producto}" no se encontró en el inventario. Puede que ya haya sido eliminado o que el nombre no coincida exactamente.`;
+        } else if (result.details) {
+          // Intentar parsear el JSON del details
+          try {
+            const detailsObj = JSON.parse(result.details);
+            if (detailsObj.message) {
+              errorMessage = detailsObj.message;
+            }
+          } catch {
+            // Si no es JSON, usar el texto tal cual
+            if (result.details.length < 200) {
+              errorMessage = result.details;
+            }
+          }
+        }
+        
+        console.error('❌ Error detallado del servidor:', result);
+        throw new Error(errorMessage);
+      }
+      
+      console.log('✅ Producto eliminado exitosamente:', result);
+      
+      // Eliminar configuración de alertas si existe
+      const productKey = getProductKey(productToDelete.tienda, productToDelete.producto);
+      if (alertConfigs[productKey]) {
+        const updatedConfigs = { ...alertConfigs };
+        delete updatedConfigs[productKey];
+        setAlertConfigs(updatedConfigs);
+        saveAlertConfig(productKey, {});
+      }
+      
+      // Cerrar modal y recargar inventario
+      setShowDeleteModal(false);
+      setProductToDelete(null);
+      await loadInventory();
+      
+    } catch (err) {
+      console.error('❌ Error al eliminar producto:', err);
+      setError(err instanceof Error ? err.message : 'Error al eliminar el producto');
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -541,17 +681,18 @@ export default function AdminInventoryPage() {
               })}
             </div>
 
-          <div className="relative w-full">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Buscar por producto o tienda..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="h-9 rounded-full border-slate-200 pl-9"
-            />
-          </div>
-        </CardHeader>
-      </Card>
+            <div className="relative w-full">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Buscar por producto o tienda..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="h-9 rounded-full border-slate-200 pl-9"
+              />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
       <Tabs defaultValue="inventory" className="space-y-4">
         <TabsList>
@@ -564,7 +705,8 @@ export default function AdminInventoryPage() {
             <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <CardTitle>
                 Inventario detallado ({sortedItems.length}
-                {stockFilter === 'all' ? '' : ` • ${stockFilterOptions.find((o) => o.value === stockFilter)?.label ?? ''}`})
+                {stockFilter === 'all' ? '' : ` • ${stockFilterOptions.find((o) => o.value === stockFilter)?.label ?? ''}`}
+                )
               </CardTitle>
               <div className="flex items-center gap-2">
                 {isRefreshing && (
@@ -640,6 +782,15 @@ export default function AdminInventoryPage() {
                               title="Editar producto"
                             >
                               <Edit className="h-4 w-4 text-muted-foreground hover:text-primary" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeleteProduct(item)}
+                              className="h-8 w-8 p-0"
+                              title="Eliminar producto"
+                            >
+                              <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />
                             </Button>
                           </div>
                         </TableCell>
@@ -749,13 +900,17 @@ export default function AdminInventoryPage() {
                     id="stock-maximo"
                     type="number"
                     min="1"
+                    max="100"
                     value={alertConfig.stockMaximo ?? DEFAULT_MAXIMUM_STOCK}
-                    onChange={(e) =>
+                    onChange={(e) => {
+                      const value = e.target.value ? parseInt(e.target.value, 10) : undefined;
+                      // Limitar a 100 como máximo
+                      const limitedValue = value && value > 100 ? 100 : value;
                       setAlertConfig({
                         ...alertConfig,
-                        stockMaximo: e.target.value ? parseInt(e.target.value, 10) : undefined,
-                      })
-                    }
+                        stockMaximo: limitedValue,
+                      });
+                    }}
                     placeholder={DEFAULT_MAXIMUM_STOCK.toString()}
                     className="h-9 text-sm font-medium"
                   />
@@ -825,6 +980,76 @@ export default function AdminInventoryPage() {
         onSave={handleSaveProduct}
         stores={stores.length > 0 ? stores : ['ALL STARS']}
       />
+
+      {/* Modal de Confirmación de Eliminación */}
+      <Dialog open={showDeleteModal} onOpenChange={setShowDeleteModal}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Trash2 className="h-5 w-5 text-destructive" />
+              Confirmar Eliminación
+            </DialogTitle>
+            <DialogDescription>
+              ¿Estás seguro de que deseas eliminar este producto del inventario?
+            </DialogDescription>
+          </DialogHeader>
+          {productToDelete && (
+            <div className="py-4">
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                <div className="space-y-2">
+                  <div>
+                    <span className="text-sm font-medium text-slate-600">Producto:</span>
+                    <p className="text-base font-semibold text-slate-900">{productToDelete.producto}</p>
+                  </div>
+                  <div>
+                    <span className="text-sm font-medium text-slate-600">Tienda:</span>
+                    <p className="text-base text-slate-700">{normalizeStoreName(productToDelete.tienda)}</p>
+                  </div>
+                  <div>
+                    <span className="text-sm font-medium text-slate-600">Cantidad actual:</span>
+                    <p className="text-base text-slate-700">{productToDelete.cantidad} unidades</p>
+                  </div>
+                </div>
+              </div>
+              <Alert className="mt-4 border-orange-200 bg-orange-50">
+                <AlertTriangle className="h-4 w-4 text-orange-600" />
+                <AlertDescription className="text-orange-800 text-sm">
+                  Esta acción no se puede deshacer. El producto será eliminado permanentemente del inventario.
+                </AlertDescription>
+              </Alert>
+            </div>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowDeleteModal(false);
+                setProductToDelete(null);
+              }}
+              disabled={loading}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={confirmDeleteProduct}
+              disabled={loading}
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Eliminando...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Eliminar
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

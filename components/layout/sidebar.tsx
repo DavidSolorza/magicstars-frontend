@@ -130,7 +130,7 @@ export const Sidebar = memo(function Sidebar({ onMobileMenuChange }: { onMobileM
     if (!user) return [];
     
     // Obtener menú base según el rol
-    let items = menuItems[user.role] || [];
+    let items = (menuItems as any)[user.role] || [];
     
     // Master usa el mismo menú que admin
     if (user.role === 'master') {
@@ -142,23 +142,18 @@ export const Sidebar = memo(function Sidebar({ onMobileMenuChange }: { onMobileM
       items = menuItems['mensajero-lider'];
     }
 
-  // Obtener menú base según el rol
-  let userMenuItems = (menuItems as any)[user.role] || [];
-  
-  // Fallback para mensajeros anteriores con flag de líder
-  if (user.role === 'mensajero' && user.isMessengerLeader) {
-    userMenuItems = menuItems['mensajero-lider'];
-  }
+    // Agregar botón de escaneo para mensajeros
+    if (user.role === 'mensajero' || user.role === 'mensajero-lider' || user.role === 'mensajero-extra') {
+      const messengerName = user.name || '';
+      const escaneoUrl = `https://inventario-magic-stars.vercel.app/?mensajero=${encodeURIComponent(messengerName)}`;
+      items = [
+        ...items,
+        { icon: ScanLine, label: 'Escaneo', href: escaneoUrl, isExternal: true },
+      ];
+    }
 
-  // Agregar botón de escaneo para mensajeros
-  if (user.role === 'mensajero' || user.role === 'mensajero-lider' || user.role === 'mensajero-extra') {
-    const messengerName = user.name || '';
-    const escaneoUrl = `https://inventario-magic-stars.vercel.app/?mensajero=${encodeURIComponent(messengerName)}`;
-    userMenuItems = [
-      ...userMenuItems,
-      { icon: ScanLine, label: 'Escaneo', href: escaneoUrl, isExternal: true },
-    ];
-  }
+    return items;
+  }, [user]);
 
   const SidebarContent = () => (
     <>

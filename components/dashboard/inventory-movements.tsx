@@ -1,8 +1,8 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { InventoryTransaction } from '@/lib/types';
-import { ProductoInventario } from '@/lib/supabase-inventario';
+import { ProductoInventario, obtenerMovimientosInventario, MovimientoInventario } from '@/lib/supabase-inventario';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import {
   ArrowDown,
   ArrowUp,
+  ArrowUpDown,
   Package,
   ShoppingCart,
   RefreshCw,
@@ -18,6 +19,8 @@ import {
   CheckCircle,
   Truck,
   Calendar,
+  Loader2,
+  Database,
 } from 'lucide-react';
 import { mockOrders } from '@/lib/mock-api';
 import { formatDistanceToNow, format } from 'date-fns';
@@ -30,9 +33,164 @@ interface InventoryMovementsProps {
 
 export function InventoryMovements({ productos, limit = 20 }: InventoryMovementsProps) {
   const [selectedDate, setSelectedDate] = useState<string>('');
+  const [movimientosDB, setMovimientosDB] = useState<MovimientoInventario[]>([]);
+  const [loadingMovimientosDB, setLoadingMovimientosDB] = useState(false);
 
-  // Generar movimientos basados en los últimos pedidos
-  const movements = useMemo(() => {
+  // Cargar movimientos desde la base de datos
+  useEffect(() => {
+    const loadMovimientos = async () => {
+      setLoadingMovimientosDB(true);
+      try {
+        let fechaDesde = undefined;
+        let fechaHasta = undefined;
+
+        if (selectedDate) {
+          // Si hay fecha seleccionada, filtrar por ese día completo
+          fechaDesde = selectedDate;
+          // Agregar un día y restar un segundo para obtener el final del día
+          const endDate = new Date(selectedDate);
+          endDate.setDate(endDate.getDate() + 1);
+          endDate.setSeconds(endDate.getSeconds() - 1);
+          fechaHasta = endDate.toISOString().split('T')[0];
+        }
+
+        // Obtener TODOS los movimientos de la tabla inventario_control
+        const movimientos = await obtenerMovimientosInventario({
+          fecha_desde: fechaDesde,
+          fecha_hasta: fechaHasta,
+          // No pasar limit para obtener TODOS los registros
+        });
+        setMovimientosDB(movimientos);
+      } catch (error) {
+        console.error('Error al cargar movimientos desde la base de datos:', error);
+        setMovimientosDB([]);
+      } finally {
+        setLoadingMovimientosDB(false);
+      }
+    };
+
+    loadMovimientos();
+  }, [selectedDate, limit]);
+
+  // Función para formatear fechas en formato de Costa Rica
+  const formatDateCR = (dateString: string | Date): string => {
+    try {
+      const date = typeof dateString === 'string' ? new Date(dateString) : dateString;
+      if (isNaN(date.getTime())) return '-';
+      
+      const dia = date.getDate().toString().padStart(2, '0');
+      const mes = (date.getMonth() + 1).toString().padStart(2, '0');
+      const anio = date.getFullYear();
+      const horas = date.getHours().toString().padStart(2, '0');
+      const minutos = date.getMinutes().toString().padStart(2, '0');
+      
+      return `${dia}/${mes}/${anio} ${horas}:${minutos}`;
+    } catch (e) {
+      return '-';
+    }
+  };
+
+  // Convertir movimientos de la BD a formato del componente
+  const movementsFromDB = useMemo(() => {
+    if (movimientosDB.length === 0) return [];
+
+    return movimientosDB.map((mov, index) => {
+      // Intentar encontrar el campo de fecha (probamos varios nombres posibles)
+      const camposFecha = ['fecha', 'created_at', 'timestamp', 'fecha_movimiento', 'fecha_creacion', 'fecha_actualizacion'];
+      let fechaMovimiento = '';
+      for (const campo of camposFecha) {
+        if (mov[campo]) {
+          fechaMovimiento = mov[campo];
+          break;
+        }
+      }
+
+      // Si no encontramos fecha, usar la fecha actual
+      if (!fechaMovimiento) {
+        fechaMovimiento = new Date().toISOString();
+      }
+
+      // Intentar encontrar campos comunes
+      const producto = mov.producto || mov.nombre_producto || mov.nombre || 'Producto desconocido';
+      const cantidad = mov.cantidad || mov.cantidad_movimiento || mov.cant || 0;
+      const tipoMovimiento = mov.tipo_movimiento || mov.tipo || mov.accion || mov.action_type || 'ajuste';
+      const motivo = mov.motivo || mov.razon || mov.reason || mov.descripcion || mov.comentario || 'Movimiento de inventario';
+      const stock = mov.stock || mov.stock_actual || mov.stock_final || mov.cantidad_final || 0;
+      const tienda = mov.tienda || mov.ubicacion || mov.location || 'ALL STARS';
+
+      // Mapear tipo de movimiento
+      let actionType: InventoryTransaction['actionType'] = 'ajuste';
+      if (typeof tipoMovimiento === 'string') {
+        const tipoLower = tipoMovimiento.toLowerCase();
+        if (tipoLower.includes('entrada') || tipoLower.includes('inicial')) actionType = 'inicial';
+        else if (tipoLower.includes('salida')) actionType = 'pedido_montado';
+        else if (tipoLower.includes('ajuste')) actionType = 'ajuste';
+        else if (tipoLower.includes('devolucion')) actionType = 'pedido_devuelto';
+        else if (tipoLower.includes('entrega')) actionType = 'pedido_entregado';
+        else if (tipoLower.includes('transferencia')) actionType = 'transferencia';
+      }
+
+      return {
+        id: mov.id || `mov-${index}-${Date.now()}`,
+        inventoryItemId: mov.id || `inv-${index}`,
+        inventoryItem: {
+          id: `inv-${index}`,
+          productId: mov.producto_id || `prod-${index}`,
+          product: {
+            id: mov.producto_id || `prod-${index}`,
+            sku: mov.sku || mov.codigo || `SKU-${index}`,
+            name: String(producto),
+            category: mov.categoria || 'Inventario',
+            price: mov.precio || 0,
+          },
+          companyId: '1',
+          company: {
+            id: '1',
+            name: String(tienda),
+            taxId: '',
+            address: '',
+            phone: '',
+            email: '',
+            isActive: true,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          },
+          currentStock: Number(stock) || 0,
+          minimumStock: mov.stock_minimo || 5,
+          maximumStock: mov.stock_maximo || 1000,
+          reservedStock: 0,
+          availableStock: Number(stock) || 0,
+          location: String(tienda),
+          lastUpdated: fechaMovimiento,
+          createdAt: fechaMovimiento,
+          isActive: true,
+        },
+        actionType,
+        quantity: Number(cantidad) || 0,
+        previousStock: Math.max(0, (Number(stock) || 0) - (Number(cantidad) || 0)),
+        newStock: Number(stock) || 0,
+        reason: String(motivo),
+        referenceId: mov.pedido_id || mov.id_pedido || mov.referencia_id,
+        referenceType: mov.pedido_id || mov.id_pedido ? 'order' : undefined,
+        userId: mov.usuario_id || mov.user_id || 'system',
+        user: {
+          id: mov.usuario_id || mov.user_id || 'system',
+          name: mov.usuario || mov.user_name || mov.user || 'Sistema',
+          email: mov.email_usuario || 'sistema@magicstars.com',
+          role: 'admin' as const,
+          phone: '',
+          isActive: true,
+          createdAt: new Date().toISOString(),
+        },
+        createdAt: fechaMovimiento,
+      } as InventoryTransaction;
+    })
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    // No limitar la cantidad - mostrar TODOS los movimientos
+  }, [movimientosDB]);
+
+  // Generar movimientos basados en los últimos pedidos (fallback)
+  const movementsMock = useMemo(() => {
     const transactions: InventoryTransaction[] = [];
     const now = new Date();
 
@@ -222,18 +380,29 @@ export function InventoryMovements({ productos, limit = 20 }: InventoryMovements
       .slice(0, limit);
   }, [productos, limit, selectedDate]);
 
+  // Usar movimientos de la BD si existen, sino usar los mock
+  const movements = movementsFromDB.length > 0 ? movementsFromDB : movementsMock;
+
   const getActionIcon = (actionType: string) => {
     switch (actionType) {
       case 'pedido_confirmado':
       case 'pedido_entregado':
+      case 'pedido_montado':
         return <ShoppingCart className="h-4 w-4 text-blue-600" />;
       case 'pedido_devuelto':
       case 'pedido_cancelado':
         return <RefreshCw className="h-4 w-4 text-green-600" />;
       case 'inicial':
         return <Package className="h-4 w-4 text-purple-600" />;
+      case 'ajuste':
       case 'ajuste_manual':
+        return <ArrowUpDown className="h-4 w-4 text-pink-600" />;
+      case 'transferencia':
         return <Truck className="h-4 w-4 text-orange-600" />;
+      case 'entrada':
+        return <ArrowUp className="h-4 w-4 text-green-600" />;
+      case 'salida':
+        return <ArrowDown className="h-4 w-4 text-red-600" />;
       default:
         return <Package className="h-4 w-4 text-gray-600" />;
     }
@@ -243,12 +412,16 @@ export function InventoryMovements({ productos, limit = 20 }: InventoryMovements
     const labels: Record<string, string> = {
       pedido_confirmado: 'Pedido Confirmado',
       pedido_entregado: 'Pedido Entregado',
+      pedido_montado: 'Pedido Montado',
       pedido_devuelto: 'Devolución',
       pedido_cancelado: 'Pedido Cancelado',
       inicial: 'Inventario Inicial',
+      ajuste: 'Ajuste',
       ajuste_manual: 'Ajuste Manual',
       transferencia: 'Transferencia',
       perdida: 'Pérdida',
+      entrada: 'Entrada',
+      salida: 'Salida',
     };
     return labels[actionType] || actionType;
   };
@@ -259,16 +432,38 @@ export function InventoryMovements({ productos, limit = 20 }: InventoryMovements
     return 'text-gray-600 bg-gray-50 border-gray-200';
   };
 
+  if (loadingMovimientosDB) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Database className="h-5 w-5" />
+            Movimientos de Inventario
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            <span className="ml-2 text-muted-foreground">Cargando movimientos...</span>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   if (movements.length === 0) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Movimientos de Inventario</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            <Database className="h-5 w-5" />
+            Movimientos de Inventario
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="text-center py-8 text-muted-foreground">
             <Package className="h-12 w-12 mx-auto mb-4 opacity-50" />
-            <p>No hay movimientos recientes</p>
+            <p>No hay movimientos recientes en la tabla inventario_control</p>
           </div>
         </CardContent>
       </Card>
@@ -283,14 +478,14 @@ export function InventoryMovements({ productos, limit = 20 }: InventoryMovements
         <div className="flex items-center justify-between">
           <div>
             <CardTitle className="flex items-center gap-2">
-              <Package className="h-5 w-5" />
+              <Database className="h-5 w-5" />
               Movimientos de Inventario
             </CardTitle>
-            <p className="text-sm text-muted-foreground mt-1">
-              {selectedDate
-                ? `Movimientos del ${format(new Date(selectedDate), "d 'de' MMMM, yyyy", { locale: es })}`
-                : `Últimos ${movements.length} movimientos basados en pedidos recientes`}
-            </p>
+            {selectedDate && (
+              <p className="text-sm text-muted-foreground mt-1">
+                Movimientos del {format(new Date(selectedDate), "d 'de' MMMM, yyyy", { locale: es })}
+              </p>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-3 pt-2 border-t">
@@ -349,10 +544,20 @@ export function InventoryMovements({ productos, limit = 20 }: InventoryMovements
                     </span>
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">
-                    {formatDistanceToNow(new Date(movement.createdAt), {
-                      addSuffix: true,
-                      locale: es,
-                    })}
+                    {(() => {
+                      try {
+                        const fecha = new Date(movement.createdAt);
+                        if (!isNaN(fecha.getTime())) {
+                          return formatDistanceToNow(fecha, {
+                            addSuffix: true,
+                            locale: es,
+                          });
+                        }
+                        return formatDateCR(movement.createdAt);
+                      } catch (e) {
+                        return formatDateCR(movement.createdAt);
+                      }
+                    })()}
                   </p>
                 </div>
               </div>

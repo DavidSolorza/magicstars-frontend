@@ -62,7 +62,8 @@ import {
   Clipboard,
   ClipboardPaste,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  AlertTriangle
 } from 'lucide-react';
 import { StatsCard } from '@/components/dashboard/stats-card';
 import { ProductosSelector } from '@/components/dashboard/productos-selector';
@@ -1812,12 +1813,12 @@ export default function AsesorDashboard() {
         </CardHeader>
         <CardContent className="p-0">
           {filteredOrders.length === 0 ? (
-            <div className="text-center py-16">
-              <div className="p-4 bg-gray-100 rounded-full w-20 h-20 mx-auto mb-4 flex items-center justify-center">
-                <Package className="w-10 h-10 text-gray-400" />
+            <div className="text-center py-12">
+              <div className="p-3 bg-gray-100 rounded-full w-16 h-16 mx-auto mb-3 flex items-center justify-center">
+                <Package className="w-8 h-8 text-gray-400" />
               </div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">No hay pedidos para mostrar</h3>
-              <p className="text-gray-500 max-w-md mx-auto">
+              <h3 className="text-lg font-semibold text-gray-900 mb-1">No hay pedidos para mostrar</h3>
+              <p className="text-sm text-gray-500 max-w-md mx-auto">
                 {searchTerm || selectedStore !== 'all' 
                   ? 'No se encontraron pedidos con los filtros aplicados. Intenta ajustar los criterios de búsqueda.'
                   : 'Los pedidos aparecerán aquí cuando estén disponibles para tu tienda.'
@@ -1830,7 +1831,7 @@ export default function AsesorDashboard() {
                 <TableHeader className="bg-gray-50/80 border-0">
                   <TableRow className="border-l-0 border-r-0">
                     {isEditMode && (
-                      <TableHead className="!p-0 font-bold text-gray-800 min-w-[30px] px-4 py-3 text-sm border-l-0">
+                      <TableHead className="!p-0 font-bold text-gray-800 min-w-[30px] px-3 py-2 text-xs border-l-0">
                         <input
                           type="checkbox"
                           checked={selectedOrders.size === filteredOrders.length && filteredOrders.length > 0}
@@ -1839,10 +1840,10 @@ export default function AsesorDashboard() {
                         />
                       </TableHead>
                     )}
-                    <TableHead className="!p-0 font-bold text-gray-800 min-w-[85px] px-3 py-3 text-sm border-l-0">ID Pedido</TableHead>
-                    <TableHead className="!p-0 font-bold text-gray-800 min-w-[300px] px-4 py-3 text-sm">Dirección</TableHead>
-                    <TableHead className="!p-0 font-bold text-gray-800 min-w-[140px] px-4 py-3 text-sm">Productos</TableHead>
-                    <TableHead className="!p-0 font-bold text-gray-800 min-w-[130px] px-4 py-3 text-sm border-r-0">Estado y Acciones</TableHead>
+                    <TableHead className="!p-0 font-bold text-gray-800 min-w-[120px] px-3 py-2 text-xs border-l-0">ID Pedido</TableHead>
+                    <TableHead className="!p-0 font-bold text-gray-800 min-w-[300px] px-3 py-2 text-xs">Dirección</TableHead>
+                    <TableHead className="!p-0 font-bold text-gray-800 min-w-[140px] px-3 py-2 text-xs">Productos</TableHead>
+                    <TableHead className="!p-0 font-bold text-gray-800 min-w-[130px] px-3 py-2 text-xs border-r-0">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1853,11 +1854,11 @@ export default function AsesorDashboard() {
                       key={order.id} 
                       className={`hover:bg-gray-50/50 transition-all duration-200 border-l-0 border-r-0 ${
                         isOrderBeingEdited(order.id) ? 'bg-yellow-50' : ''
-                      }`}
+                      } ${!isConfirmed ? 'bg-orange-50/30' : ''}`}
                     >
                       {/* Checkbox para selección */}
                       {isEditMode && (
-                        <TableCell className="!p-0 px-4 py-3 border-l-0">
+                        <TableCell className="!p-0 px-3 py-2 border-l-0">
                           <input
                             type="checkbox"
                             checked={selectedOrders.has(order.id)}
@@ -1868,10 +1869,17 @@ export default function AsesorDashboard() {
                       )}
                       
                       {/* ID Pedido con Cliente */}
-                      <TableCell className="!p-0 font-medium px-3 py-3 border-l-0">
-                        <div className="flex flex-col gap-1.5 min-w-0 pl-6">
-                          {/* Primera fila: ID */}
-                          <span className="font-mono text-xs font-bold text-gray-900 leading-tight">{order.id}</span>
+                      <TableCell className="!p-0 font-medium px-3 py-2 border-l-0">
+                        <div className="flex flex-col gap-1 min-w-0 pr-2">
+                          {/* Primera fila: ID con icono de warning si no está confirmado */}
+                          <div className="flex items-center gap-1.5">
+                            {!isConfirmed && (
+                              <div className="flex items-center justify-center w-5 h-5 rounded-full bg-orange-100 border border-orange-400 shadow-sm animate-pulse flex-shrink-0">
+                                <AlertTriangle className="w-3 h-3 text-orange-600" />
+                              </div>
+                            )}
+                            <span className="font-mono text-xs font-bold text-gray-900 leading-tight break-all">{order.id}</span>
+                          </div>
                           {/* Segunda fila: Nombre */}
                           <span className="font-medium text-xs text-gray-900 truncate" title={order.customerName}>
                             {order.customerName}
@@ -1909,8 +1917,8 @@ export default function AsesorDashboard() {
                       </TableCell>
 
                       {/* Dirección */}
-                      <TableCell className="!p-0 px-4 py-3">
-                        <div className="space-y-2">
+                      <TableCell className="!p-0 px-3 py-2">
+                        <div className="space-y-1.5">
                           {/* Dirección completa */}
                           <div className="text-sm text-gray-800 leading-tight max-w-[280px] font-medium" title={order.customerAddress}>
                             {order.customerAddress || 'Sin dirección'}
@@ -2016,8 +2024,8 @@ export default function AsesorDashboard() {
                       </TableCell>
 
                       {/* Productos */}
-                      <TableCell className="!p-0 px-4 py-3">
-                        <div className="space-y-2">
+                      <TableCell className="!p-0 px-3 py-2">
+                        <div className="space-y-1.5">
                           {/* Productos */}
                           <div className="text-sm text-gray-800 leading-tight font-medium" title={order.productos || 'No especificados'}>
                             {order.productos || 'No especificados'}
@@ -2052,65 +2060,42 @@ export default function AsesorDashboard() {
                       </TableCell>
 
                       {/* Estado y Acciones */}
-                      <TableCell className="!p-0 px-4 py-3 border-r-0">
-                        <div className="flex flex-col gap-3 items-center">
-                          {/* Badge de confirmación sin punto (ya está en ID Pedido) */}
-                          <div className="flex items-center justify-center">
-                            <Badge 
-                              variant="outline" 
-                              className={`text-xs font-semibold px-3 py-1.5 rounded-md shadow-sm whitespace-nowrap border-2 ${
-                                isConfirmed 
-                                  ? 'bg-green-100 text-green-800 border-green-400' 
-                                  : 'bg-orange-100 text-orange-800 border-orange-400'
-                              }`}
-                            >
-                              {isConfirmed ? (
-                                <>
-                                  <CheckCircle className="w-3.5 h-3.5 mr-1 inline" />
-                                  Confirmado
-                                </>
-                              ) : (
-                                <>
-                                  <Clock className="w-3.5 h-3.5 mr-1 inline" />
-                                  Sin Confirmar
-                                </>
-                              )}
-                            </Badge>
-                          </div>
-                          {/* Botones de acción más grandes y visibles */}
-                          <div className="flex gap-2.5 items-center justify-center">
+                      <TableCell className="!p-0 px-3 py-2 border-r-0">
+                        <div className="flex flex-col gap-2 items-center justify-center">
+                          {!isConfirmed && (
                             <Button
-                              size="lg"
+                              size="sm"
+                              variant="default"
+                              onClick={() => handleConfirmOrder(order)}
+                              className="h-8 px-3 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white shadow-md hover:shadow-lg transition-all hover:scale-105 font-semibold flex items-center gap-1.5 w-full"
+                              title="Confirmar pedido"
+                              aria-label="Confirmar pedido"
+                            >
+                              <CheckCircle className="w-3.5 h-3.5" />
+                              <span className="text-xs">Confirmar</span>
+                            </Button>
+                          )}
+                          <div className="flex gap-2 items-center justify-center">
+                            <Button
+                              size="sm"
                               variant="outline"
                               onClick={() => openViewModalFor(order)}
-                              className="h-9 w-9 p-0 bg-purple-50 border-purple-200 hover:bg-purple-100 hover:border-purple-300 text-purple-700 shadow-sm transition-all hover:scale-110"
+                              className="h-8 w-8 p-0 bg-purple-50 border-purple-200 hover:bg-purple-100 hover:border-purple-300 text-purple-700 shadow-sm transition-all hover:scale-110"
                               title="Ver detalles completos del pedido"
                               aria-label="Ver detalles del pedido"
                             >
-                              <FileText className="w-4 h-4" />
+                              <FileText className="w-3.5 h-3.5" />
                             </Button>
                             <Button
-                              size="lg"
+                              size="sm"
                               variant="outline"
                               onClick={() => openEditModalFor(order)}
-                              className="h-9 w-9 p-0 bg-blue-50 border-blue-200 hover:bg-blue-100 hover:border-blue-300 text-blue-700 shadow-sm transition-all hover:scale-110"
+                              className="h-8 w-8 p-0 bg-blue-50 border-blue-200 hover:bg-blue-100 hover:border-blue-300 text-blue-700 shadow-sm transition-all hover:scale-110"
                               title="Editar pedido"
                               aria-label="Editar pedido"
                             >
-                              <Edit3 className="w-4 h-4" />
+                              <Edit3 className="w-3.5 h-3.5" />
                             </Button>
-                            {!isConfirmed && (
-                              <Button
-                                size="lg"
-                                variant="outline"
-                                onClick={() => handleConfirmOrder(order)}
-                                className="h-9 w-9 p-0 bg-green-50 border-green-200 hover:bg-green-100 hover:border-green-300 text-green-700 shadow-sm transition-all hover:scale-110"
-                                title="Confirmar pedido"
-                                aria-label="Confirmar pedido"
-                              >
-                                <CheckCircle className="w-4 h-4" />
-                              </Button>
-                            )}
                           </div>
                         </div>
                       </TableCell>
@@ -2123,55 +2108,64 @@ export default function AsesorDashboard() {
           )}
               {/* Controles de Paginación */}
               {totalPages > 1 && (
-              <div className="flex items-center justify-between border-t px-4 py-3">
-                <div className="text-sm text-gray-700">
-                  Mostrando <span className="font-medium">{(currentPage - 1) * 50 + 1}</span> a{' '}
-                  <span className="font-medium">{Math.min(currentPage * 50, filteredOrders.length)}</span> de{' '}
-                  <span className="font-medium">{filteredOrders.length}</span> pedidos
-                </div>
-                <div className="flex items-center gap-2">
+              <div className="flex items-center justify-center gap-2 border-t px-3 py-1.5 bg-gray-50/50">
+                <div className="flex items-center gap-1">
                   <Button
-                    variant="outline"
+                    variant="ghost"
                     size="sm"
                     onClick={() => handlePageChange(currentPage - 1)}
                     disabled={currentPage === 1}
+                    className="h-6 w-6 p-0 hover:bg-gray-200"
                   >
-                    <ChevronLeft className="h-4 w-4" />
-                    Anterior
+                    <ChevronLeft className="h-3 w-3" />
                   </Button>
-                  <div className="flex gap-1">
-                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                      let pageNum: number;
-                      if (totalPages <= 5) {
-                        pageNum = i + 1;
-                      } else if (currentPage <= 3) {
-                        pageNum = i + 1;
-                      } else if (currentPage >= totalPages - 2) {
-                        pageNum = totalPages - 4 + i;
-                      } else {
-                        pageNum = currentPage - 2 + i;
+                  
+                  {/* Indicadores de página con puntos */}
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: totalPages }, (_, i) => {
+                      const pageNum = i + 1;
+                      // Mostrar solo algunos puntos: primeros, últimos, y alrededor de la actual
+                      const showDot = 
+                        pageNum === 1 || 
+                        pageNum === totalPages ||
+                        (pageNum >= currentPage - 1 && pageNum <= currentPage + 1) ||
+                        (currentPage <= 3 && pageNum <= 5) ||
+                        (currentPage >= totalPages - 2 && pageNum >= totalPages - 4);
+                      
+                      if (!showDot) {
+                        // Mostrar puntos suspensivos
+                        if (pageNum === currentPage - 2 && currentPage > 4) {
+                          return <span key={pageNum} className="text-gray-400 text-[10px]">...</span>;
+                        }
+                        if (pageNum === currentPage + 2 && currentPage < totalPages - 3) {
+                          return <span key={pageNum} className="text-gray-400 text-[10px]">...</span>;
+                        }
+                        return null;
                       }
+                      
                       return (
-                        <Button
+                        <button
                           key={pageNum}
-                          variant={currentPage === pageNum ? 'default' : 'outline'}
-                          size="sm"
                           onClick={() => handlePageChange(pageNum)}
-                          className={currentPage === pageNum ? 'bg-purple-600 hover:bg-purple-700' : ''}
-                        >
-                          {pageNum}
-                        </Button>
+                          className={`h-1.5 w-1.5 rounded-full transition-all ${
+                            currentPage === pageNum
+                              ? 'bg-purple-600 w-4'
+                              : 'bg-gray-300 hover:bg-gray-400'
+                          }`}
+                          aria-label={`Ir a página ${pageNum}`}
+                        />
                       );
                     })}
                   </div>
+                  
                   <Button
-                    variant="outline"
+                    variant="ghost"
                     size="sm"
                     onClick={() => handlePageChange(currentPage + 1)}
                     disabled={currentPage === totalPages}
+                    className="h-6 w-6 p-0 hover:bg-gray-200"
                   >
-                    Siguiente
-                    <ChevronRight className="h-4 w-4" />
+                    <ChevronRight className="h-3 w-3" />
                   </Button>
                 </div>
               </div>

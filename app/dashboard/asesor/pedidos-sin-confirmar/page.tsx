@@ -11,7 +11,10 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Calendar, Search, Package, Clock, CheckCircle, AlertCircle, Edit, Save, X } from 'lucide-react';
+import { Calendar, Search, Package, Clock, CheckCircle, AlertCircle, Edit, Save, X, Warehouse, Filter, RefreshCw, TrendingUp, Building2, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react';
+import { CardDescription } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
+import { Loader2 } from 'lucide-react';
 import { 
   getAllPedidosByTiendaPreconfirmacion, 
   getPedidosCountByTiendaPreconfirmacion,
@@ -291,7 +294,16 @@ export default function PedidosSinConfirmarPage() {
       const orderToUpdate = orders.find(o => o.id === editingOrder);
       if (!orderToUpdate) return;
 
+      // Actualizar todos los campos editables
       await updatePedidoPreconfirmacion(editingOrder, {
+        cliente_nombre: editingCustomerName,
+        cliente_telefono: editingCustomerPhone,
+        direccion: editingCustomerAddress,
+        provincia: editingProvince,
+        canton: editingCanton,
+        distrito: editingDistrict,
+        valor_total: editingPrice,
+        productos: editingProductos,
         estado_pedido: editingStatus,
         metodo_pago: editingPaymentMethod,
         confirmado: editingConfirmado,
@@ -332,61 +344,147 @@ export default function PedidosSinConfirmarPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <div className="flex flex-col items-center justify-center gap-3 py-12">
+        <div className="relative w-6 h-6">
+          <div className="absolute inset-0 rounded-full border-2 border-sky-200/30"></div>
+          <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-sky-500 border-r-indigo-500 border-b-purple-500 animate-spin"></div>
+        </div>
+        <span className="text-sm text-muted-foreground">Cargando pedidos...</span>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Carritos Abandonados y Finalizados</h1>
-          <p className="text-gray-600">Gestiona carritos abandonados (#) y finalizados (letra mayúscula)</p>
+    <div className="space-y-8">
+      {/* Header mejorado con gradiente */}
+      <div className="relative rounded-2xl bg-gradient-to-r from-sky-500 via-indigo-500 to-purple-500 p-8 text-white overflow-hidden">
+        <div className="absolute inset-0 opacity-20"></div>
+        <div className="relative flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+          <div className="flex items-center gap-4">
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/20 backdrop-blur-sm shadow-lg">
+              <Package className="h-8 w-8 text-white" />
+            </div>
+            <div>
+              <p className="inline-flex items-center gap-2 rounded-full bg-white/20 backdrop-blur-sm px-4 py-1.5 text-sm font-medium text-white mb-3">
+                <AlertTriangle className="h-4 w-4" />
+                Panel de gestión de carritos
+              </p>
+              <h1 className="text-4xl font-bold tracking-tight text-white mb-2">
+                Carritos Abandonados y Finalizados
+              </h1>
+              <p className="text-white/90 text-base">
+                Gestiona carritos abandonados (#) y finalizados (letra mayúscula)
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button 
+              onClick={loadData} 
+              disabled={loading}
+              className="flex items-center gap-2 bg-white/10 backdrop-blur-sm border-white/20 text-white hover:bg-white/20 transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+              variant="outline"
+            >
+              <RefreshCw className={cn('w-4 h-4', loading ? 'animate-spin' : '')} />
+              <span>Recargar</span>
+            </Button>
+          </div>
         </div>
       </div>
 
-      {/* Contadores */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Carritos Abandonados</CardTitle>
-            <AlertCircle className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-bold text-red-800">
-              {filteredOrders.filter(o => o.id.startsWith('#')).length}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              Pedidos que empiezan con #
-            </p>
+      {/* Cards de Estadísticas - Mejoradas */}
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <Card className="relative overflow-hidden hover:shadow-lg transition-all duration-200 border-2 border-red-200 dark:border-red-800">
+          <div className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full bg-gradient-to-br from-red-400/30 to-rose-400/30 blur-xl" />
+          <CardContent className="relative p-5">
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Carritos Abandonados</p>
+                <p className="text-3xl font-bold text-red-700 dark:text-red-400">
+                  {filteredOrders.filter(o => o.id.startsWith('#')).length}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">Pedidos que empiezan con #</p>
+              </div>
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-red-500 to-rose-500 text-white shadow-lg">
+                <AlertCircle className="w-6 h-6" />
+              </div>
+            </div>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Carritos Finalizados</CardTitle>
-            <CheckCircle className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-bold text-green-800">
-              {filteredOrders.filter(o => /^[A-Z]/.test(o.id)).length}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              Pedidos que empiezan con letra mayúscula
-            </p>
+        <Card className="relative overflow-hidden hover:shadow-lg transition-all duration-200 border-2 border-emerald-200 dark:border-emerald-800">
+          <div className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full bg-gradient-to-br from-emerald-400/30 to-green-400/30 blur-xl" />
+          <CardContent className="relative p-5">
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Carritos Finalizados</p>
+                <p className="text-3xl font-bold text-emerald-700 dark:text-emerald-400">
+                  {filteredOrders.filter(o => /^[A-Z]/.test(o.id)).length}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">Pedidos que empiezan con letra mayúscula</p>
+              </div>
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-green-500 text-white shadow-lg">
+                <CheckCircle className="w-6 h-6" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="relative overflow-hidden hover:shadow-lg transition-all duration-200 border-2 border-sky-200 dark:border-sky-800">
+          <div className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full bg-gradient-to-br from-sky-400/30 to-blue-400/30 blur-xl" />
+          <CardContent className="relative p-5">
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Total de pedidos</p>
+                <p className="text-3xl font-bold text-sky-700 dark:text-sky-400">{filteredRecords.toLocaleString()}</p>
+                <p className="text-xs text-muted-foreground mt-1">De {totalRecords} registros</p>
+              </div>
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-sky-500 to-blue-500 text-white shadow-lg">
+                <Package className="w-6 h-6" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="relative overflow-hidden hover:shadow-lg transition-all duration-200 border-2 border-purple-200 dark:border-purple-800">
+          <div className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full bg-gradient-to-br from-purple-400/30 to-indigo-400/30 blur-xl" />
+          <CardContent className="relative p-5">
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Página actual</p>
+                <p className="text-3xl font-bold text-purple-700 dark:text-purple-400">{currentPage}</p>
+                <p className="text-xs text-muted-foreground mt-1">De {totalPages} páginas</p>
+              </div>
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-purple-500 to-indigo-500 text-white shadow-lg">
+                <TrendingUp className="w-6 h-6" />
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Filtros */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Filtros</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-6">
+      {/* Sección de Filtros - Mejorada */}
+      <div className="relative group">
+        <div className="absolute -inset-0.5 bg-gradient-to-r from-sky-400 to-indigo-400 rounded-2xl opacity-10 group-hover:opacity-20 blur transition duration-300"></div>
+        <Card className="relative border-0 shadow-lg bg-gradient-to-br from-sky-50/50 to-indigo-50/50 dark:from-sky-950/50 dark:to-indigo-950/50">
+          <CardHeader className="pb-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-sky-500 to-indigo-500 text-white shadow-md">
+                  <Filter className="w-5 h-5" />
+                </div>
+                <div>
+                  <CardTitle className="text-lg font-semibold">Filtros y Búsqueda</CardTitle>
+                  <CardDescription className="mt-1">
+                    Filtra pedidos por período, tipo de carrito, mensajero o búsqueda de texto
+                  </CardDescription>
+                </div>
+              </div>
+              <Badge variant="secondary" className="text-sm px-3 py-1">
+                {filteredRecords} resultado{filteredRecords === 1 ? '' : 's'}
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-6">
           {/* Filtros por período */}
           <div className="space-y-3">
             <Label className="text-sm font-medium text-gray-700">Período</Label>
@@ -592,7 +690,8 @@ export default function PedidosSinConfirmarPage() {
             </Select>
           </div>
         </CardContent>
-      </Card>
+        </Card>
+      </div>
 
       {/* Tabla de pedidos */}
       <Card>
@@ -603,139 +702,141 @@ export default function PedidosSinConfirmarPage() {
             </CardTitle>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-0">
           <div className="overflow-x-auto">
-            <Table>
+            <Table className="min-w-full">
               <TableHeader>
                 <TableRow>
-                  <TableHead className="font-bold text-gray-800 min-w-[120px] px-2 py-2 text-xs">Cliente</TableHead>
-                  <TableHead className="font-bold text-gray-800 min-w-[100px] px-2 py-2 text-xs">Teléfono</TableHead>
-                  <TableHead className="font-bold text-gray-800 min-w-[150px] px-2 py-2 text-xs">Dirección</TableHead>
-                  <TableHead className="font-bold text-gray-800 min-w-[100px] px-2 py-2 text-xs">Monto</TableHead>
-                  <TableHead className="font-bold text-gray-800 min-w-[100px] px-2 py-2 text-xs">Método de Pago</TableHead>
-                  <TableHead className="font-bold text-gray-800 min-w-[100px] px-2 py-2 text-xs">Tipo</TableHead>
-                  <TableHead className="font-bold text-gray-800 min-w-[100px] px-2 py-2 text-xs">Mensajero</TableHead>
-                  <TableHead className="font-bold text-gray-800 min-w-[100px] px-2 py-2 text-xs">Fecha</TableHead>
-                  <TableHead className="font-bold text-gray-800 min-w-[100px] px-2 py-2 text-xs">Acciones</TableHead>
+                  <TableHead className="font-bold text-gray-800 min-w-[180px] px-4 py-3 text-sm">Cliente</TableHead>
+                  <TableHead className="font-bold text-gray-800 min-w-[130px] px-4 py-3 text-sm">Teléfono</TableHead>
+                  <TableHead className="font-bold text-gray-800 min-w-[250px] px-4 py-3 text-sm">Dirección</TableHead>
+                  <TableHead className="font-bold text-gray-800 min-w-[120px] px-4 py-3 text-sm">Monto</TableHead>
+                  <TableHead className="font-bold text-gray-800 min-w-[140px] px-4 py-3 text-sm">Método de Pago</TableHead>
+                  <TableHead className="font-bold text-gray-800 min-w-[140px] px-4 py-3 text-sm">Tipo</TableHead>
+                  <TableHead className="font-bold text-gray-800 min-w-[130px] px-4 py-3 text-sm">Mensajero</TableHead>
+                  <TableHead className="font-bold text-gray-800 min-w-[130px] px-4 py-3 text-sm">Fecha</TableHead>
+                  <TableHead className="font-bold text-gray-800 min-w-[120px] px-4 py-3 text-sm">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {currentOrders.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-8 text-gray-500">
-                      {orders.length === 0 ? 'No hay pedidos disponibles' : 'No hay pedidos que coincidan con los filtros'}
+                    <TableCell colSpan={9} className="text-center py-12">
+                      <div className="flex flex-col items-center">
+                        <div className="p-3 bg-gray-100 rounded-full w-16 h-16 mb-3 flex items-center justify-center">
+                          <Package className="w-8 h-8 text-gray-400" />
+                        </div>
+                        <h3 className="text-lg font-semibold text-gray-900 mb-1">No hay pedidos para mostrar</h3>
+                        <p className="text-sm text-gray-500">
+                          {orders.length === 0 ? 'No hay pedidos disponibles' : 'No hay pedidos que coincidan con los filtros'}
+                        </p>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ) : (
                   currentOrders.map((order) => (
                   <TableRow key={order.id} className="hover:bg-gray-50">
                     {/* Cliente */}
-                    <TableCell className="px-2 py-1">
+                    <TableCell className="px-4 py-3">
                       <div className="space-y-1">
                         <div className="font-medium text-sm text-gray-900">
                           {order.customerName}
                         </div>
-                        <div className="text-xs text-gray-500">
+                        <div className="text-xs text-gray-500 font-mono">
                           ID: {order.id}
                         </div>
                       </div>
                     </TableCell>
 
                     {/* Teléfono */}
-                    <TableCell className="px-2 py-1">
-                      <div className="text-sm text-gray-700">
+                    <TableCell className="px-4 py-3">
+                      <div className="text-sm text-gray-700 font-mono">
                         {order.customerPhone}
                       </div>
                     </TableCell>
 
                     {/* Dirección */}
-                    <TableCell className="px-2 py-1">
-                      <div className="text-sm text-gray-700 max-w-[150px] truncate">
+                    <TableCell className="px-4 py-3">
+                      <div className="text-sm text-gray-700 max-w-[250px]">
                         {order.customerAddress}
                       </div>
                     </TableCell>
 
                     {/* Monto */}
-                    <TableCell className="px-2 py-1">
+                    <TableCell className="px-4 py-3">
                       <div className="text-sm font-semibold text-gray-900">
                         ₡{order.totalAmount.toLocaleString()}
                       </div>
                     </TableCell>
 
                     {/* Método de Pago */}
-                    <TableCell className="px-2 py-1">
-                      <div className="space-y-1">
-                        <Badge
-                          variant="outline"
-                          className={`text-xs font-semibold px-2 py-1 rounded ${
-                            order.paymentMethod === 'efectivo' ? 'bg-green-50 text-green-700 border-green-200' :
-                            order.paymentMethod === 'sinpe' ? 'bg-blue-50 text-blue-700 border-blue-200' :
-                            order.paymentMethod === 'tarjeta' ? 'bg-purple-50 text-purple-700 border-purple-200' :
-                            'bg-orange-50 text-orange-700 border-orange-200'
-                          }`}
-                        >
-                          {order.paymentMethod.charAt(0).toUpperCase() + order.paymentMethod.slice(1)}
-                        </Badge>
-                      </div>
+                    <TableCell className="px-4 py-3">
+                      <Badge
+                        variant="outline"
+                        className={`text-xs font-semibold px-3 py-1.5 rounded ${
+                          order.paymentMethod === 'efectivo' ? 'bg-green-50 text-green-700 border-green-200' :
+                          order.paymentMethod === 'sinpe' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                          order.paymentMethod === 'tarjeta' ? 'bg-purple-50 text-purple-700 border-purple-200' :
+                          'bg-orange-50 text-orange-700 border-orange-200'
+                        }`}
+                      >
+                        {order.paymentMethod.charAt(0).toUpperCase() + order.paymentMethod.slice(1)}
+                      </Badge>
                     </TableCell>
 
                     {/* Tipo de Carrito */}
-                    <TableCell className="px-2 py-1">
-                      <div className="space-y-1">
-                        <Badge
-                          variant="outline"
-                          className={`text-xs font-semibold px-2 py-1 rounded ${
-                            order.id.startsWith('#') ? 'bg-red-50 text-red-700 border-red-200' :
-                            /^[A-Z]/.test(order.id) ? 'bg-green-50 text-green-700 border-green-200' :
-                            'bg-gray-50 text-gray-700 border-gray-200'
-                          }`}
-                        >
-                          {order.id.startsWith('#') ? '🛒 Abandonado' :
-                           /^[A-Z]/.test(order.id) ? '⏳ Sin Confirmar' :
-                           '❓ Otro'}
-                        </Badge>
-                      </div>
+                    <TableCell className="px-4 py-3">
+                      <Badge
+                        variant="outline"
+                        className={`text-xs font-semibold px-3 py-1.5 rounded ${
+                          order.id.startsWith('#') ? 'bg-red-50 text-red-700 border-red-200' :
+                          /^[A-Z]/.test(order.id) ? 'bg-green-50 text-green-700 border-green-200' :
+                          'bg-gray-50 text-gray-700 border-gray-200'
+                        }`}
+                      >
+                        {order.id.startsWith('#') ? '🛒 Abandonado' :
+                         /^[A-Z]/.test(order.id) ? '⏳ Sin Confirmar' :
+                         '❓ Otro'}
+                      </Badge>
                     </TableCell>
 
                     {/* Mensajero */}
-                    <TableCell className="px-2 py-1">
-                      <div className="text-sm text-gray-700">
-                        {order.assignedMessengerId ? (
-                          <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-                            {order.assignedMessengerId}
-                          </Badge>
-                        ) : (
-                          <Badge variant="outline" className="bg-gray-50 text-gray-700 border-gray-200">
-                            Sin asignar
-                          </Badge>
-                        )}
-                      </div>
+                    <TableCell className="px-4 py-3">
+                      {order.assignedMessengerId ? (
+                        <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-xs">
+                          {order.assignedMessengerId}
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="bg-gray-50 text-gray-700 border-gray-200 text-xs">
+                          Sin asignar
+                        </Badge>
+                      )}
                     </TableCell>
 
                     {/* Fecha */}
-                    <TableCell className="px-2 py-1">
-                      <div className="flex items-center gap-1 text-sm text-gray-700">
-                        <Calendar className="w-3 h-3" />
-                        {order.fecha_creacion ? 
-                          new Date(order.fecha_creacion).toLocaleDateString('es-CR') : 
-                          'Sin fecha'
-                        }
+                    <TableCell className="px-4 py-3">
+                      <div className="flex items-center gap-1.5 text-sm text-gray-700">
+                        <Calendar className="w-4 h-4 text-gray-400" />
+                        <span>
+                          {order.fecha_creacion ? 
+                            new Date(order.fecha_creacion).toLocaleDateString('es-CR') : 
+                            'Sin fecha'
+                          }
+                        </span>
                       </div>
                     </TableCell>
 
                     {/* Acciones */}
-                    <TableCell className="px-2 py-1">
-                      <div className="flex gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleEdit(order)}
-                          className="text-xs"
-                        >
-                          <Edit className="w-3 h-3 mr-1" />
-                          Editar
-                        </Button>
-                      </div>
+                    <TableCell className="px-4 py-3">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleEdit(order)}
+                        className="text-xs h-8"
+                      >
+                        <Edit className="w-3.5 h-3.5 mr-1.5" />
+                        Editar
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))
@@ -746,29 +847,64 @@ export default function PedidosSinConfirmarPage() {
 
           {/* Paginación */}
           {totalPages > 1 && (
-            <div className="flex items-center justify-between mt-4">
-              <div className="text-sm text-gray-700">
-                Mostrando {startIndex + 1} a {Math.min(endIndex, filteredRecords)} de {filteredRecords} pedidos
-              </div>
-              <div className="flex gap-2">
+            <div className="flex items-center justify-center gap-2 border-t px-3 py-1.5 bg-gray-50/50">
+              <div className="flex items-center gap-1">
                 <Button
-                  variant="outline"
+                  variant="ghost"
                   size="sm"
                   onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                   disabled={currentPage === 1}
+                  className="h-6 w-6 p-0 hover:bg-gray-200"
                 >
-                  Anterior
+                  <ChevronLeft className="h-3 w-3" />
                 </Button>
-                <span className="flex items-center px-3 py-1 text-sm">
-                  Página {currentPage} de {totalPages}
-                </span>
+                
+                {/* Indicadores de página con puntos */}
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: totalPages }, (_, i) => {
+                    const pageNum = i + 1;
+                    // Mostrar solo algunos puntos: primeros, últimos, y alrededor de la actual
+                    const showDot = 
+                      pageNum === 1 || 
+                      pageNum === totalPages ||
+                      (pageNum >= currentPage - 1 && pageNum <= currentPage + 1) ||
+                      (currentPage <= 3 && pageNum <= 5) ||
+                      (currentPage >= totalPages - 2 && pageNum >= totalPages - 4);
+                    
+                    if (!showDot) {
+                      // Mostrar puntos suspensivos
+                      if (pageNum === currentPage - 2 && currentPage > 4) {
+                        return <span key={pageNum} className="text-gray-400 text-[10px]">...</span>;
+                      }
+                      if (pageNum === currentPage + 2 && currentPage < totalPages - 3) {
+                        return <span key={pageNum} className="text-gray-400 text-[10px]">...</span>;
+                      }
+                      return null;
+                    }
+                    
+                    return (
+                      <button
+                        key={pageNum}
+                        onClick={() => setCurrentPage(pageNum)}
+                        className={`h-1.5 w-1.5 rounded-full transition-all ${
+                          currentPage === pageNum
+                            ? 'bg-purple-600 w-4'
+                            : 'bg-gray-300 hover:bg-gray-400'
+                        }`}
+                        aria-label={`Ir a página ${pageNum}`}
+                      />
+                    );
+                  })}
+                </div>
+                
                 <Button
-                  variant="outline"
+                  variant="ghost"
                   size="sm"
                   onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                   disabled={currentPage === totalPages}
+                  className="h-6 w-6 p-0 hover:bg-gray-200"
                 >
-                  Siguiente
+                  <ChevronRight className="h-3 w-3" />
                 </Button>
               </div>
             </div>

@@ -98,17 +98,48 @@ export async function POST(request: NextRequest) {
     };
 
     console.log('📤 [API] Enviando a webhook de Railway (diccionario combos):', {
+      url: API_URLS.ADD_DICCIONARIO_COMBOS,
       combo_existente: payload.combo_existente,
       productos_count: payload.combo_nuevo.length,
+      payload: JSON.stringify(payload),
     });
 
     // Enviar al webhook de Railway/n8n
-    const webhookResponse = await fetch(API_URLS.ADD_DICCIONARIO_COMBOS, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 segundos timeout
+    
+    let webhookResponse;
+    try {
+      webhookResponse = await fetch(API_URLS.ADD_DICCIONARIO_COMBOS, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+    } catch (fetchError: any) {
+      clearTimeout(timeoutId);
+      if (fetchError.name === 'AbortError') {
+        console.error('❌ [API] Timeout al conectar con webhook de Railway (diccionario combos)');
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'Timeout al conectar con el servidor',
+            message: 'La solicitud tardó demasiado tiempo. Intenta nuevamente.',
+            timestamp: new Date().toISOString(),
+          },
+          { status: 504 }
+        );
+      }
+      throw fetchError;
+    }
+
+    console.log('📥 [API] Respuesta del webhook (diccionario combos):', {
+      status: webhookResponse.status,
+      statusText: webhookResponse.statusText,
+      ok: webhookResponse.ok,
     });
 
     if (!webhookResponse.ok) {
@@ -128,10 +159,15 @@ export async function POST(request: NextRequest) {
 
     let webhookData;
     try {
-      webhookData = await webhookResponse.json();
+      const responseText = await webhookResponse.text();
+      // Intentar parsear como JSON, si falla usar el texto
+      try {
+        webhookData = JSON.parse(responseText);
+      } catch {
+        webhookData = { message: responseText };
+      }
     } catch (e) {
-      // Si la respuesta no es JSON, usar el texto
-      webhookData = { message: await webhookResponse.text() };
+      webhookData = { message: 'Respuesta vacía del webhook' };
     }
     
     console.log('✅ [API] Combo agregado al diccionario exitosamente');
