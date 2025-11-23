@@ -67,6 +67,7 @@ import {
 import { StatsCard } from '@/components/dashboard/stats-card';
 import { ProductosSelector } from '@/components/dashboard/productos-selector';
 import { ProductoInventario, obtenerTodosProductosALLSTARS } from '@/lib/supabase-inventario';
+import { UnmappedProductsManager } from '@/components/dashboard/unmapped-products-manager';
 import { getProvincias, getCantones, getDistritos, getTipoEnvio } from '@/lib/zonas';
 import { createPedidoPreconfirmacion, updatePedidoPreconfirmacion, getPedidosDelDiaByTiendaPreconfirmacion, getAllPedidosByTiendaPreconfirmacion, getPedidosCountByTiendaPreconfirmacion, getTotalPedidosPreconfirmacionCount } from '@/lib/supabase-pedidos';
 import { API_URLS } from '@/lib/config';
@@ -1382,6 +1383,31 @@ export default function AsesorDashboard() {
           </div>
         );
       })()}
+
+      {/* Gestor de Productos No Encontrados */}
+      {productosDisponibles.length > 0 && (
+        <UnmappedProductsManager
+          orders={filteredOrders}
+          inventory={productosDisponibles}
+          defaultStore={asesorTienda}
+          onMappingSaved={() => {
+            toast({
+              title: '✅ Mapeo guardado',
+              description: 'El producto ha sido mapeado correctamente y se aplicará en futuros pedidos.',
+              variant: 'default',
+            });
+          }}
+          onInventoryUpdate={(newProduct) => {
+            // Agregar el nuevo producto al inventario local
+            setProductosDisponibles(prev => [...prev, newProduct]);
+            toast({
+              title: '✅ Producto creado',
+              description: `El producto "${newProduct.producto}" ha sido agregado al inventario.`,
+              variant: 'default',
+            });
+          }}
+        />
+      )}
 
       {/* Filtros Mejorados */}
       <Card className="bg-gradient-to-br from-gray-50 to-gray-100 border-gray-200">
