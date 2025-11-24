@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useAuth } from '@/contexts/auth-context';
 import { obtenerInventario, ProductoInventario } from '@/lib/supabase-inventario';
 import { StatsCard } from '@/components/dashboard/stats-card';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -112,6 +113,7 @@ const getStatusInfo = (
 };
 
 export default function AdminInventoryPage() {
+  const { user } = useAuth();
   const [inventory, setInventory] = useState<ProductoInventario[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -220,14 +222,10 @@ export default function AdminInventoryPage() {
       setLoading(true);
       setError(null);
       
-      // Determinar si es nuevo o editar basado en si el producto ya existe
-      const productoExiste = inventory.some(
-        (item) => 
-          item.producto === productData.producto && 
-          normalizeStoreName(item.tienda) === normalizeStoreName(productData.tienda)
-      );
-      
-      const tipoOperacion = productoExiste ? 'editar' : 'nuevo';
+      // Determinar si es nuevo o editar basado en editingProduct (igual que en asesor)
+      // Si editingProduct existe, es editar; si no, es nuevo
+      const isEditing = editingProduct !== null;
+      const tipoOperacion = isEditing ? 'editar' : 'nuevo';
       
       // Obtener configuración de alertas para este producto si existe
       const productKey = getProductKey(productData.tienda, productData.producto);
@@ -241,10 +239,16 @@ export default function AdminInventoryPage() {
         stock_minimo: alertConfig?.stockMinimo ?? DEFAULT_MINIMUM_STOCK,
         stock_maximo: alertConfig?.stockMaximo ?? DEFAULT_MAXIMUM_STOCK,
         tipo_operacion: tipoOperacion,
-        usuario: 'admin', // TODO: Obtener del contexto de autenticación
+        usuario: user?.name || user?.email || 'admin',
       };
       
-      console.log('📤 Enviando producto al endpoint:', payload);
+      console.log('📤 [Admin] Enviando producto al endpoint:', {
+        tipo_operacion: tipoOperacion,
+        producto: payload.producto,
+        es_edicion: isEditing,
+        editingProduct: editingProduct,
+        usuario: payload.usuario,
+      });
       
       // Llamar al endpoint
       const response = await fetch('/api/inventory', {
@@ -261,13 +265,21 @@ export default function AdminInventoryPage() {
         throw new Error(result.error || result.message || 'Error al guardar el producto');
       }
       
-      console.log('✅ Producto guardado exitosamente:', result);
+      console.log('✅ [Admin] Producto guardado exitosamente:', result);
+      
+      // Cerrar el modal y limpiar estados
+      if (editingProduct) {
+        setShowProductModal(false);
+        setEditingProduct(null);
+      } else {
+        setShowProductModal(false);
+      }
       
       // Recargar inventario después de guardar
       await loadInventory();
       
     } catch (err) {
-      console.error('❌ Error al guardar producto:', err);
+      console.error('❌ [Admin] Error al guardar producto:', err);
       setError(err instanceof Error ? err.message : 'Error al guardar el producto');
     } finally {
       setLoading(false);
@@ -290,7 +302,7 @@ export default function AdminInventoryPage() {
       const payload = {
         producto: productToDelete.producto,
         tipo_operacion: 'eliminar',
-        usuario: 'admin', // TODO: Obtener del contexto de autenticación
+        usuario: user?.name || user?.email || 'admin',
       };
       
       console.log('🗑️ Eliminando producto:', payload);

@@ -92,7 +92,7 @@ export function ProductFormModal({
             </div>
             <div className="min-w-0 flex-1">
               <DialogTitle className="text-lg leading-tight">
-                {isEditing ? 'Crear Nuevo Producto' : 'Crear Nuevo Producto'}
+                {isEditing ? 'Editar Producto' : 'Crear Nuevo Producto'}
               </DialogTitle>
               <DialogDescription className="mt-0.5 text-xs">
                 {isEditing

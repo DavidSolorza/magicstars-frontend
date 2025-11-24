@@ -75,12 +75,18 @@ export default function AdminDashboard() {
       totalAsignados: number;
       totalEntregados: number;
       totalDevueltos: number;
+      totalReagendados: number;
+      totalFaltantes: number;
+      totalEfectivo: number;
+      totalSinpe: number;
+      tasaEntrega: number;
       entregas: Array<{
         id: string;
         cliente: string;
         hora: string;
         estado: string;
         valor: number;
+        metodoPago?: string;
       }>;
     }> = {};
 
@@ -108,6 +114,11 @@ export default function AdminDashboard() {
           totalAsignados: 0,
           totalEntregados: 0,
           totalDevueltos: 0,
+          totalReagendados: 0,
+          totalFaltantes: 0,
+          totalEfectivo: 0,
+          totalSinpe: 0,
+          tasaEntrega: 0,
           entregas: [],
         };
       }
@@ -118,34 +129,51 @@ export default function AdminDashboard() {
       const estado = pedido.estado_pedido?.toLowerCase() || 
         (pedido.mensajero_concretado ? 'entregado' : pedido.mensajero_asignado ? 'en_ruta' : 'pendiente');
       
+      const valor = typeof pedido.valor_total === 'number' ? pedido.valor_total : Number.parseFloat(String(pedido.valor_total ?? '0')) || 0;
+      const metodoPago = pedido.metodo_pago?.toLowerCase() || '';
+
       if (estado === 'entregado' || pedido.mensajero_concretado) {
         summary.totalEntregados += 1;
+        if (metodoPago === 'efectivo' || metodoPago === 'cash') {
+          summary.totalEfectivo += valor;
+        } else if (metodoPago === 'sinpe') {
+          summary.totalSinpe += valor;
+        }
       }
-      if (estado === 'devolucion') {
+      if (estado === 'devolucion' || estado === 'devuelto') {
         summary.totalDevueltos += 1;
       }
+      if (estado === 'reagendado' || estado === 'reagendo') {
+        summary.totalReagendados += 1;
+      }
+      if (estado === 'pendiente' || estado === 'sin_asignar') {
+        summary.totalFaltantes += 1;
+      }
 
-      if (estado === 'entregado' || estado === 'en_ruta' || estado === 'devolucion') {
-        const fechaEntrega = pedido.fecha_entrega || pedido.fecha_creacion;
-        try {
-          const fecha = new Date(fechaEntrega);
-          const hora = fecha.toLocaleTimeString('es-CR', { hour: '2-digit', minute: '2-digit' });
-          
-          summary.entregas.push({
-            id: pedido.id_pedido,
-            cliente: pedido.cliente_nombre || 'Sin nombre',
-            hora,
-            estado,
-            valor: typeof pedido.valor_total === 'number' ? pedido.valor_total : Number.parseFloat(String(pedido.valor_total ?? '0')) || 0,
-          });
-        } catch (error) {
-          // Error al parsear fecha, continuar sin esta entrega
-        }
+      const fechaEntrega = pedido.fecha_entrega || pedido.fecha_creacion;
+      try {
+        const fecha = new Date(fechaEntrega);
+        const hora = fecha.toLocaleTimeString('es-CR', { hour: '2-digit', minute: '2-digit' });
+        
+        summary.entregas.push({
+          id: pedido.id_pedido,
+          cliente: pedido.cliente_nombre || 'Sin nombre',
+          hora,
+          estado,
+          valor,
+          metodoPago: pedido.metodo_pago || '',
+        });
+      } catch (error) {
+        // Error al parsear fecha, continuar sin esta entrega
       }
     });
 
     Object.values(messengerSummary).forEach(summary => {
       summary.entregas.sort((a, b) => b.hora.localeCompare(a.hora));
+      // Calcular tasa de entrega
+      if (summary.totalAsignados > 0) {
+        summary.tasaEntrega = (summary.totalEntregados / summary.totalAsignados) * 100;
+      }
     });
 
     return Object.values(messengerSummary).filter(s => s.totalAsignados > 0);
@@ -158,12 +186,18 @@ export default function AdminDashboard() {
       totalPedidos: number;
       totalEntregados: number;
       totalDevueltos: number;
+      totalReagendados: number;
+      totalFaltantes: number;
+      totalEfectivo: number;
+      totalSinpe: number;
+      tasaEntrega: number;
       pedidos: Array<{
         id: string;
         cliente: string;
         valor: number;
         estado: string;
         fechaCreacion: string;
+        metodoPago?: string;
       }>;
     }> = {};
 
@@ -176,6 +210,11 @@ export default function AdminDashboard() {
           totalPedidos: 0,
           totalEntregados: 0,
           totalDevueltos: 0,
+          totalReagendados: 0,
+          totalFaltantes: 0,
+          totalEfectivo: 0,
+          totalSinpe: 0,
+          tasaEntrega: 0,
           pedidos: [],
         };
       }
@@ -186,19 +225,34 @@ export default function AdminDashboard() {
       const estado = pedido.estado_pedido?.toLowerCase() || 
         (pedido.mensajero_concretado ? 'entregado' : pedido.mensajero_asignado ? 'en_ruta' : 'pendiente');
       
+      const valor = typeof pedido.valor_total === 'number' ? pedido.valor_total : Number.parseFloat(String(pedido.valor_total ?? '0')) || 0;
+      const metodoPago = pedido.metodo_pago?.toLowerCase() || '';
+
       if (estado === 'entregado' || pedido.mensajero_concretado) {
         summary.totalEntregados += 1;
+        if (metodoPago === 'efectivo' || metodoPago === 'cash') {
+          summary.totalEfectivo += valor;
+        } else if (metodoPago === 'sinpe') {
+          summary.totalSinpe += valor;
+        }
       }
-      if (estado === 'devolucion') {
+      if (estado === 'devolucion' || estado === 'devuelto') {
         summary.totalDevueltos += 1;
+      }
+      if (estado === 'reagendado' || estado === 'reagendo') {
+        summary.totalReagendados += 1;
+      }
+      if (estado === 'pendiente' || estado === 'sin_asignar') {
+        summary.totalFaltantes += 1;
       }
 
       summary.pedidos.push({
         id: pedido.id_pedido,
         cliente: pedido.cliente_nombre || 'Sin nombre',
-        valor: typeof pedido.valor_total === 'number' ? pedido.valor_total : Number.parseFloat(String(pedido.valor_total ?? '0')) || 0,
+        valor,
         estado,
         fechaCreacion: pedido.fecha_creacion,
+        metodoPago: pedido.metodo_pago || '',
       });
     });
 
@@ -212,6 +266,10 @@ export default function AdminDashboard() {
           return 0;
         }
       });
+      // Calcular tasa de entrega
+      if (summary.totalPedidos > 0) {
+        summary.tasaEntrega = (summary.totalEntregados / summary.totalPedidos) * 100;
+      }
     });
 
     return Object.values(tiendaSummary).filter(s => s.totalPedidos > 0);
