@@ -41,6 +41,7 @@ import {
 } from 'lucide-react';
 import { ProductFormModal } from '@/components/dashboard/product-form-modal';
 import { Input } from '@/components/ui/input';
+import { API_URLS } from '@/lib/config';
 
 interface UnmappedProduct {
   id: string;
@@ -349,7 +350,7 @@ export function UnmappedProductsManager({
     setShowMappingDialog(true);
   };
 
-  const handleSaveMapping = () => {
+  const handleSaveMapping = async () => {
     if (!selectedUnmapped || !selectedMappedProduct) return;
 
     const normalized = normalizeProductName(selectedUnmapped.name);
@@ -379,6 +380,52 @@ export function UnmappedProductsManager({
         ...prev,
         [normalized]: comboMappingName,
       }));
+
+      // Enviar al endpoint de diccionario de combos
+      try {
+        const comboNuevo: string[] = [];
+        for (let i = 0; i < mappingQuantity; i++) {
+          comboNuevo.push(selectedMappedProduct);
+        }
+        
+        const payload = {
+          combo_existente: selectedUnmapped.name, // Producto no encontrado
+          combo_nuevo: comboNuevo, // Array con el producto repetido según cantidad
+        };
+
+        console.log('📤 Enviando combo simple al diccionario:', {
+          endpoint: API_URLS.ADD_DICCIONARIO_COMBOS,
+          payload,
+          detalle: {
+            producto_no_encontrado: selectedUnmapped.name,
+            producto_inventario: selectedMappedProduct,
+            cantidad: mappingQuantity,
+            productos_array: comboNuevo,
+          },
+        });
+        
+        const response = await fetch(API_URLS.ADD_DICCIONARIO_COMBOS, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('❌ Error al enviar combo al diccionario:', {
+            status: response.status,
+            statusText: response.statusText,
+            error: errorText,
+          });
+        } else {
+          const responseData = await response.json().catch(() => ({}));
+          console.log('✅ Combo enviado al diccionario exitosamente:', responseData);
+        }
+      } catch (error) {
+        console.error('❌ Error al enviar combo al diccionario:', error);
+      }
     } else {
       // Mapeo simple sin cantidad
       saveMapping(selectedUnmapped.name, selectedMappedProduct, false, undefined, 1);
@@ -462,7 +509,7 @@ export function UnmappedProductsManager({
     setComboItems(comboItems.filter((_, i) => i !== index));
   };
 
-  const handleSaveCombo = () => {
+  const handleSaveCombo = async () => {
     // Validaciones mejoradas
     if (!comboName.trim()) {
       return;
@@ -503,6 +550,53 @@ export function UnmappedProductsManager({
       ...prev,
       [normalized]: comboMappingName,
     }));
+
+    // Enviar al endpoint de diccionario de combos
+    try {
+      const comboNuevo: string[] = [];
+      comboItems.forEach(item => {
+        for (let i = 0; i < item.quantity; i++) {
+          comboNuevo.push(item.productName.trim());
+        }
+      });
+      
+      const payload = {
+        combo_existente: selectedUnmapped.name, // Producto no encontrado (ej: "1 X URO Y ACEITE TRULY")
+        combo_nuevo: comboNuevo, // Array de productos del inventario (ej: ["ACEITE TRULY MORADO GLASSED DONUT"])
+      };
+
+      console.log('📤 Enviando combo al diccionario:', {
+        endpoint: API_URLS.ADD_DICCIONARIO_COMBOS,
+        payload,
+        detalle: {
+          producto_no_encontrado: selectedUnmapped.name,
+          productos_inventario: comboNuevo,
+          cantidad_productos: comboNuevo.length,
+        },
+      });
+      
+      const response = await fetch(API_URLS.ADD_DICCIONARIO_COMBOS, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ Error al enviar combo al diccionario:', {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorText,
+        });
+      } else {
+        const responseData = await response.json().catch(() => ({}));
+        console.log('✅ Combo enviado al diccionario exitosamente:', responseData);
+      }
+    } catch (error) {
+      console.error('❌ Error al enviar combo al diccionario:', error);
+    }
 
     // Remover de la lista de no mapeados
     setUnmappedProducts(prev =>
@@ -904,7 +998,7 @@ export function UnmappedProductsManager({
               </div>
               <div className="min-w-0 flex-1">
                 <DialogTitle className="text-lg leading-tight">
-                  Asignar Producto No Encontrado
+                  Asignar Producto No Encontrado (producto nuevo)
                 </DialogTitle>
                 <DialogDescription className="mt-0.5 text-xs">
                   {selectedUnmapped 
@@ -1004,14 +1098,14 @@ export function UnmappedProductsManager({
                     </SelectContent>
                   </Select>
                   <div className="flex flex-col gap-1">
-                    <label className="text-xs text-muted-foreground">Cantidad</label>
                     <Input
                       type="number"
                       min="1"
                       value={mappingQuantity}
                       onChange={(e) => setMappingQuantity(parseInt(e.target.value, 10) || 1)}
-                      className="w-20 h-10"
+                      className="w-20 h-10 bg-red-50 border-red-200 text-red-400 cursor-not-allowed"
                       placeholder="1"
+                      disabled
                     />
                   </div>
                 </div>

@@ -20,19 +20,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Package, Plus, Edit } from 'lucide-react';
+import { Edit } from 'lucide-react';
 
-interface ProductFormModalProps {
+interface EditProductModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  product?: ProductoInventario | null;
+  product: ProductoInventario;
   onSave: (product: Omit<ProductoInventario, 'idx'>) => void;
   stores?: string[];
-  hideStoreField?: boolean; // Nueva prop para ocultar el campo de tienda
-  defaultStore?: string; // Tienda por defecto cuando se oculta el campo
+  hideStoreField?: boolean;
+  defaultStore?: string;
 }
 
-export function ProductFormModal({
+export function EditProductModal({
   open,
   onOpenChange,
   product,
@@ -40,7 +40,7 @@ export function ProductFormModal({
   stores = ['ALL STARS', 'Para Machos CR', 'BeautyFan'],
   hideStoreField = false,
   defaultStore,
-}: ProductFormModalProps) {
+}: EditProductModalProps) {
   const [formData, setFormData] = useState({
     producto: '',
     cantidad: 0,
@@ -58,14 +58,8 @@ export function ProductFormModal({
         cantidad: product.cantidad || 0,
         tienda: defaultTienda,
       });
-    } else {
-      setFormData({
-        producto: '',
-        cantidad: 0,
-        tienda: defaultTienda,
-      });
     }
-  }, [product, stores, hideStoreField, defaultStore]);
+  }, [product, stores, hideStoreField, defaultStore, open]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -76,35 +70,27 @@ export function ProductFormModal({
     onOpenChange(false);
   };
 
-  const isEditing = !!product;
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] w-[95vw] max-w-[480px] overflow-y-auto">
         <DialogHeader>
           <div className="flex items-center gap-2.5">
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-              {isEditing ? (
-                <Edit className="h-4 w-4 text-primary" />
-              ) : (
-                <Plus className="h-4 w-4 text-primary" />
-              )}
+              <Edit className="h-4 w-4 text-primary" />
             </div>
             <div className="min-w-0 flex-1">
               <DialogTitle className="text-lg leading-tight">
-                {isEditing ? 'Crear Nuevo Producto' : 'Crear Nuevo Producto'}
+                Editar Producto
               </DialogTitle>
               <DialogDescription className="mt-0.5 text-xs">
-                {isEditing
-                  ? 'Modifica la información del producto'
-                  : 'Agrega un nuevo producto al inventario'}
+                Modifica la información del producto
               </DialogDescription>
             </div>
           </div>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">J
+          <div className="space-y-2">
             <Label htmlFor="producto" className="text-sm font-semibold">
               Nombre del Producto *
             </Label>
@@ -119,9 +105,6 @@ export function ProductFormModal({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="cantidad" className="text-sm font-semibold">
-              Cantidad Inicial en Stock
-            </Label>
             <Input
               id="cantidad"
               type="number"
@@ -131,7 +114,8 @@ export function ProductFormModal({
                 setFormData({ ...formData, cantidad: parseInt(e.target.value, 10) || 0 })
               }
               placeholder="0"
-              className="h-9"
+              className="h-9 bg-red-50 border-red-200 text-red-400 cursor-not-allowed"
+              disabled
             />
           </div>
 
@@ -169,17 +153,8 @@ export function ProductFormModal({
               Cancelar
             </Button>
             <Button type="submit" className="h-9 w-full text-xs sm:w-auto" size="sm">
-              {isEditing ? (
-                <>
-                  <Edit className="mr-1.5 h-3.5 w-3.5" />
-                  Guardar Cambios
-                </>
-              ) : (
-                <>
-                  <Plus className="mr-1.5 h-3.5 w-3.5" />
-                  Crear Producto
-                </>
-              )}
+              <Edit className="mr-1.5 h-3.5 w-3.5" />
+              Guardar Cambios
             </Button>
           </DialogFooter>
         </form>

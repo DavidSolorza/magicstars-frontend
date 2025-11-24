@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
   ArrowDown,
   ArrowUp,
@@ -35,24 +36,35 @@ export function InventoryMovements({ productos, limit = 20 }: InventoryMovements
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [movimientosDB, setMovimientosDB] = useState<MovimientoInventario[]>([]);
   const [loadingMovimientosDB, setLoadingMovimientosDB] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [reloadTrigger, setReloadTrigger] = useState(0);
 
-  // Cargar movimientos desde la base de datos
+  // Cargar movimientos desde la base de datos (tabla inventario_control)
   useEffect(() => {
     const loadMovimientos = async () => {
       setLoadingMovimientosDB(true);
+      setError(null);
       try {
         let fechaDesde = undefined;
         let fechaHasta = undefined;
 
         if (selectedDate) {
           // Si hay fecha seleccionada, filtrar por ese día completo
-          fechaDesde = selectedDate;
-          // Agregar un día y restar un segundo para obtener el final del día
+          // Para created_at necesitamos el formato completo con hora
+          const startDate = new Date(selectedDate);
+          startDate.setHours(0, 0, 0, 0);
+          fechaDesde = startDate.toISOString();
+          
           const endDate = new Date(selectedDate);
-          endDate.setDate(endDate.getDate() + 1);
-          endDate.setSeconds(endDate.getSeconds() - 1);
-          fechaHasta = endDate.toISOString().split('T')[0];
+          endDate.setHours(23, 59, 59, 999);
+          fechaHasta = endDate.toISOString();
         }
+
+        console.log('📋 [Movimientos] Cargando datos de inventario_control:', {
+          fecha_desde: fechaDesde,
+          fecha_hasta: fechaHasta,
+          tiene_filtro_fecha: !!selectedDate,
+        });
 
         // Obtener TODOS los movimientos de la tabla inventario_control
         const movimientos = await obtenerMovimientosInventario({
@@ -60,9 +72,30 @@ export function InventoryMovements({ productos, limit = 20 }: InventoryMovements
           fecha_hasta: fechaHasta,
           // No pasar limit para obtener TODOS los registros
         });
+
+        console.log('📋 [Movimientos] Datos obtenidos de inventario_control:', {
+          total: movimientos.length,
+          primeros_registros: movimientos.slice(0, 3).map(m => ({
+            id: m.id,
+            producto: m.producto,
+            cantidad: m.cantidad,
+            fecha: m.fecha || m.created_at || m.timestamp,
+            tipo: m.tipo_movimiento || m.tipo,
+          })),
+        });
+
+        if (movimientos.length > 0) {
+          console.log('✅ [Movimientos] Primer registro completo:', movimientos[0]);
+          console.log('✅ [Movimientos] Columnas disponibles:', Object.keys(movimientos[0]));
+        } else {
+          console.warn('⚠️ [Movimientos] No se obtuvieron registros de inventario_control');
+        }
+
         setMovimientosDB(movimientos);
       } catch (error) {
-        console.error('Error al cargar movimientos desde la base de datos:', error);
+        const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
+        console.error('❌ [Movimientos] Error al cargar movimientos desde inventario_control:', error);
+        setError(`Error al cargar datos: ${errorMessage}`);
         setMovimientosDB([]);
       } finally {
         setLoadingMovimientosDB(false);
@@ -70,33 +103,81 @@ export function InventoryMovements({ productos, limit = 20 }: InventoryMovements
     };
 
     loadMovimientos();
-  }, [selectedDate, limit]);
+  }, [selectedDate, reloadTrigger]);
 
-  // Función para formatear fechas en formato de Costa Rica
-  const formatDateCR = (dateString: string | Date): string => {
+  // Función para formatear fechas en formato de Costa Rica de forma amigable
+  const formatDateCR = (dateString: string | Date) => {
     try {
       const date = typeof dateString === 'string' ? new Date(dateString) : dateString;
-      if (isNaN(date.getTime())) return '-';
+      if (isNaN(date.getTime())) return { fecha: '-', hora: '', relativo: '' };
       
-      const dia = date.getDate().toString().padStart(2, '0');
-      const mes = (date.getMonth() + 1).toString().padStart(2, '0');
+      const meses = [
+        'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+        'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'
+      ];
+      
+      const diasSemana = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+      
+      const dia = date.getDate();
+      const mes = meses[date.getMonth()];
       const anio = date.getFullYear();
+      const diaSemana = diasSemana[date.getDay()];
       const horas = date.getHours().toString().padStart(2, '0');
       const minutos = date.getMinutes().toString().padStart(2, '0');
+      const segundos = date.getSeconds().toString().padStart(2, '0');
       
-      return `${dia}/${mes}/${anio} ${horas}:${minutos}`;
+      const ahora = new Date();
+      const diferenciaMs = ahora.getTime() - date.getTime();
+      const diferenciaSegundos = Math.floor(diferenciaMs / 1000);
+      const diferenciaMinutos = Math.floor(diferenciaSegundos / 60);
+      const diferenciaHoras = Math.floor(diferenciaMinutos / 60);
+      const diferenciaDias = Math.floor(diferenciaHoras / 24);
+      
+      let tiempoRelativo = '';
+      if (diferenciaSegundos < 60) {
+        tiempoRelativo = 'hace un momento';
+      } else if (diferenciaMinutos < 60) {
+        tiempoRelativo = diferenciaMinutos === 1 ? 'hace 1 min' : `hace ${diferenciaMinutos} min`;
+      } else if (diferenciaHoras < 24) {
+        tiempoRelativo = diferenciaHoras === 1 ? 'hace 1 hora' : `hace ${diferenciaHoras} hrs`;
+      } else if (diferenciaDias < 7) {
+        tiempoRelativo = diferenciaDias === 1 ? 'hace 1 día' : `hace ${diferenciaDias} días`;
+      }
+      
+      // Formato: "Lun, 23 de noviembre de 2025"
+      const fechaCompleta = `${diaSemana}, ${dia} de ${mes} de ${anio}`;
+      const horaCompleta = `${horas}:${minutos}:${segundos}`;
+      
+      return {
+        fecha: fechaCompleta,
+        hora: horaCompleta,
+        relativo: tiempoRelativo
+      };
     } catch (e) {
-      return '-';
+      return { fecha: '-', hora: '', relativo: '' };
     }
   };
 
-  // Convertir movimientos de la BD a formato del componente
+  // Convertir movimientos de la BD (inventario_control) a formato del componente
   const movementsFromDB = useMemo(() => {
-    if (movimientosDB.length === 0) return [];
+    if (movimientosDB.length === 0) {
+      console.log('📋 [Movimientos] No hay datos en movimientosDB');
+      return [];
+    }
+
+    console.log('📋 [Movimientos] Procesando', movimientosDB.length, 'registros de inventario_control');
 
     return movimientosDB.map((mov, index) => {
+      // Log del primer registro para debugging
+      if (index === 0) {
+        console.log('📋 [Movimientos] Ejemplo de registro de inventario_control:', {
+          keys: Object.keys(mov),
+          valores: mov,
+        });
+      }
+
       // Intentar encontrar el campo de fecha (probamos varios nombres posibles)
-      const camposFecha = ['fecha', 'created_at', 'timestamp', 'fecha_movimiento', 'fecha_creacion', 'fecha_actualizacion'];
+      const camposFecha = ['fecha', 'created_at', 'timestamp', 'fecha_movimiento', 'fecha_creacion', 'fecha_actualizacion', 'fecha_registro'];
       let fechaMovimiento = '';
       for (const campo of camposFecha) {
         if (mov[campo]) {
@@ -107,16 +188,17 @@ export function InventoryMovements({ productos, limit = 20 }: InventoryMovements
 
       // Si no encontramos fecha, usar la fecha actual
       if (!fechaMovimiento) {
+        console.warn('⚠️ [Movimientos] No se encontró campo de fecha en registro:', mov);
         fechaMovimiento = new Date().toISOString();
       }
 
-      // Intentar encontrar campos comunes
-      const producto = mov.producto || mov.nombre_producto || mov.nombre || 'Producto desconocido';
-      const cantidad = mov.cantidad || mov.cantidad_movimiento || mov.cant || 0;
-      const tipoMovimiento = mov.tipo_movimiento || mov.tipo || mov.accion || mov.action_type || 'ajuste';
-      const motivo = mov.motivo || mov.razon || mov.reason || mov.descripcion || mov.comentario || 'Movimiento de inventario';
-      const stock = mov.stock || mov.stock_actual || mov.stock_final || mov.cantidad_final || 0;
-      const tienda = mov.tienda || mov.ubicacion || mov.location || 'ALL STARS';
+      // Intentar encontrar campos comunes de inventario_control
+      const producto = mov.producto || mov.nombre_producto || mov.nombre || mov.producto_nombre || 'Producto desconocido';
+      const cantidad = mov.cantidad || mov.cantidad_movimiento || mov.cant || mov.cantidad_cambio || 0;
+      const tipoMovimiento = mov.tipo_movimiento || mov.tipo || mov.accion || mov.action_type || mov.tipo_operacion || 'ajuste';
+      const motivo = mov.motivo || mov.razon || mov.reason || mov.descripcion || mov.comentario || mov.nota || mov.observaciones || 'Movimiento de inventario';
+      const stock = mov.stock || mov.stock_actual || mov.stock_final || mov.cantidad_final || mov.stock_anterior || mov.cantidad_anterior || 0;
+      const tienda = mov.tienda || mov.ubicacion || mov.location || mov.tienda_nombre || 'ALL STARS';
 
       // Mapear tipo de movimiento
       let actionType: InventoryTransaction['actionType'] = 'ajuste';
@@ -380,8 +462,24 @@ export function InventoryMovements({ productos, limit = 20 }: InventoryMovements
       .slice(0, limit);
   }, [productos, limit, selectedDate]);
 
-  // Usar movimientos de la BD si existen, sino usar los mock
-  const movements = movementsFromDB.length > 0 ? movementsFromDB : movementsMock;
+  // Usar directamente los movimientos de la BD (inventario_control)
+  // Solo usar mock si no hay datos de la BD
+  const movements = movimientosDB.length > 0 ? movimientosDB : movementsMock;
+
+  // Log para debugging
+  useEffect(() => {
+    if (movimientosDB.length > 0) {
+      console.log('✅ [Movimientos] Usando datos de inventario_control:', movimientosDB.length, 'movimientos');
+      // Log de las columnas disponibles
+      if (movimientosDB[0]) {
+        console.log('📊 [Movimientos] Columnas disponibles:', Object.keys(movimientosDB[0]));
+      }
+    } else if (movementsMock.length > 0) {
+      console.log('⚠️ [Movimientos] No hay datos de inventario_control, usando datos mock:', movementsMock.length, 'movimientos');
+    } else {
+      console.log('ℹ️ [Movimientos] No hay movimientos disponibles');
+    }
+  }, [movimientosDB.length, movementsMock.length]);
 
   const getActionIcon = (actionType: string) => {
     switch (actionType) {
@@ -451,7 +549,8 @@ export function InventoryMovements({ productos, limit = 20 }: InventoryMovements
     );
   }
 
-  if (movements.length === 0) {
+  // Solo mostrar mensaje de "sin datos" si realmente no hay datos de la BD
+  if (movimientosDB.length === 0 && !loadingMovimientosDB) {
     return (
       <Card>
         <CardHeader>
@@ -459,11 +558,23 @@ export function InventoryMovements({ productos, limit = 20 }: InventoryMovements
             <Database className="h-5 w-5" />
             Movimientos de Inventario
           </CardTitle>
+          <p className="text-sm text-muted-foreground mt-1">
+            Datos desde la tabla <code className="text-xs bg-slate-100 px-1.5 py-0.5 rounded">inventario_control</code>
+          </p>
         </CardHeader>
         <CardContent>
           <div className="text-center py-8 text-muted-foreground">
-            <Package className="h-12 w-12 mx-auto mb-4 opacity-50" />
-            <p>No hay movimientos recientes en la tabla inventario_control</p>
+            <Database className="h-12 w-12 mx-auto mb-4 opacity-50" />
+            <p className="font-medium mb-1">No hay datos disponibles</p>
+            <p className="text-sm mb-4">
+              {selectedDate 
+                ? `No se encontraron registros para la fecha seleccionada en la tabla inventario_control`
+                : 'No hay registros en la tabla inventario_control'}
+            </p>
+            <div className="text-xs text-muted-foreground space-y-1">
+              <p>Debug: movimientosDB.length = {movimientosDB.length}</p>
+              <p>Debug: loadingMovimientosDB = {String(loadingMovimientosDB)}</p>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -481,11 +592,37 @@ export function InventoryMovements({ productos, limit = 20 }: InventoryMovements
               <Database className="h-5 w-5" />
               Movimientos de Inventario
             </CardTitle>
-            {selectedDate && (
-              <p className="text-sm text-muted-foreground mt-1">
-                Movimientos del {format(new Date(selectedDate), "d 'de' MMMM, yyyy", { locale: es })}
+            <div className="flex items-center gap-2 mt-1">
+              <p className="text-sm text-muted-foreground">
+                Datos desde la tabla <code className="text-xs bg-slate-100 px-1.5 py-0.5 rounded">inventario_control</code>
+                {selectedDate && (
+                  <> • Movimientos del {format(new Date(selectedDate), "d 'de' MMMM, yyyy", { locale: es })}</>
+                )}
               </p>
-            )}
+            </div>
+            <div className="flex items-center gap-2 mt-1">
+              {movimientosDB.length > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  {movimientosDB.length} registro{movimientosDB.length !== 1 ? 's' : ''} cargado{movimientosDB.length !== 1 ? 's' : ''} desde la base de datos
+                  {movimientosDB[0] && (
+                    <> • {Object.keys(movimientosDB[0]).length} columna{Object.keys(movimientosDB[0]).length !== 1 ? 's' : ''}</>
+                  )}
+                </p>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setError(null);
+                  setReloadTrigger(prev => prev + 1);
+                }}
+                disabled={loadingMovimientosDB}
+                className="h-7 text-xs"
+              >
+                <RefreshCw className={`w-3 h-3 mr-1 ${loadingMovimientosDB ? 'animate-spin' : ''}`} />
+                {loadingMovimientosDB ? 'Cargando...' : 'Recargar'}
+              </Button>
+            </div>
           </div>
         </div>
         <div className="flex items-center gap-3 pt-2 border-t">
@@ -515,70 +652,129 @@ export function InventoryMovements({ productos, limit = 20 }: InventoryMovements
           )}
         </div>
       </CardHeader>
-      <CardContent>
-        <div className="space-y-3">
-          {movements.map((movement) => (
-            <div
-              key={movement.id}
-              className="flex items-center justify-between rounded-lg border p-3 transition-colors hover:bg-slate-50"
-            >
-              <div className="flex items-center gap-3 flex-1 min-w-0">
-                <div
-                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${getActionColor(
-                    movement.actionType,
-                    movement.quantity
-                  )}`}
-                >
-                  {getActionIcon(movement.actionType)}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-sm truncate">
-                    {movement.inventoryItem.product.name}
-                  </p>
-                  <div className="flex items-center gap-2 mt-1">
-                    <Badge variant="outline" className="text-xs">
-                      {getActionLabel(movement.actionType)}
-                    </Badge>
-                    <span className="text-xs text-muted-foreground truncate">
-                      {movement.reason}
-                    </span>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {(() => {
-                      try {
-                        const fecha = new Date(movement.createdAt);
-                        if (!isNaN(fecha.getTime())) {
-                          return formatDistanceToNow(fecha, {
-                            addSuffix: true,
-                            locale: es,
-                          });
-                        }
-                        return formatDateCR(movement.createdAt);
-                      } catch (e) {
-                        return formatDateCR(movement.createdAt);
-                      }
-                    })()}
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-4 shrink-0 ml-4">
-                <div className="text-right">
-                  <p
-                    className={`font-bold text-sm ${
-                      movement.quantity > 0 ? 'text-green-600' : 'text-red-600'
-                    }`}
-                  >
-                    {movement.quantity > 0 ? '+' : ''}
-                    {movement.quantity}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Stock: {movement.newStock}
-                  </p>
-                </div>
-              </div>
-            </div>
-          ))}
+      {error && (
+        <div className="px-6 pb-4">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+            <p className="text-sm text-red-800 font-semibold">Error:</p>
+            <p className="text-xs text-red-600">{error}</p>
+          </div>
         </div>
+      )}
+      <CardContent>
+        {movimientosDB.length > 0 ? (
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  {Object.keys(movimientosDB[0]).map((key) => {
+                    let displayName = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                    // Cambiar "Cantidad" por "Stock"
+                    if (key.toLowerCase() === 'cantidad') {
+                      displayName = 'Stock';
+                    }
+                    return (
+                      <TableHead key={key}>
+                        {displayName}
+                      </TableHead>
+                    );
+                  })}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {movimientosDB.map((movimiento, index) => (
+                  <TableRow key={movimiento.id || `row-${index}`}>
+                    {Object.keys(movimientosDB[0]).map((key) => {
+                      const value = movimiento[key];
+                      let displayValue: any = value;
+                      
+                      // Formatear valores según el tipo
+                      if (value === null || value === undefined) {
+                        displayValue = <span className="text-muted-foreground italic">-</span>;
+                      } else if (typeof value === 'boolean') {
+                        displayValue = (
+                          <Badge variant={value ? 'default' : 'secondary'}>
+                            {value ? 'Sí' : 'No'}
+                          </Badge>
+                        );
+                      } else if (typeof value === 'object' && value !== null) {
+                        displayValue = (
+                          <pre className="text-xs bg-slate-100 p-1 rounded overflow-auto max-w-md">
+                            {JSON.stringify(value, null, 2)}
+                          </pre>
+                        );
+                      } else if (typeof value === 'string' && (key.toLowerCase().includes('fecha') || key.toLowerCase().includes('date') || key.toLowerCase().includes('created') || key.toLowerCase().includes('timestamp'))) {
+                        // Formatear fechas de forma amigable
+                        try {
+                          const date = new Date(value);
+                          if (!isNaN(date.getTime())) {
+                            const fechaInfo = formatDateCR(date);
+                            displayValue = (
+                              <div className="flex flex-col">
+                                <span className="font-semibold text-slate-900">
+                                  {fechaInfo.fecha}
+                                </span>
+                                <span className="text-xs text-muted-foreground">
+                                  {fechaInfo.hora} {fechaInfo.relativo && `• ${fechaInfo.relativo}`}
+                                </span>
+                              </div>
+                            );
+                          } else {
+                            displayValue = <span>{value}</span>;
+                          }
+                        } catch (e) {
+                          displayValue = <span>{value}</span>;
+                        }
+                      } else if (typeof value === 'number' && key.toLowerCase().includes('cantidad')) {
+                        // Resaltar cantidades
+                        displayValue = (
+                          <span className={`font-semibold ${
+                            value > 0 ? 'text-green-600' : value < 0 ? 'text-red-600' : 'text-slate-900'
+                          }`}>
+                            {value > 0 ? '+' : ''}{value}
+                          </span>
+                        );
+                      } else if (typeof value === 'number') {
+                        // Formatear otros números
+                        displayValue = (
+                          <span className="font-semibold text-slate-900">
+                            {value.toLocaleString('es-CR')}
+                          </span>
+                        );
+                      } else {
+                        displayValue = <span>{String(value)}</span>;
+                      }
+                      
+                      return (
+                        <TableCell key={key}>
+                          {displayValue}
+                        </TableCell>
+                      );
+                    })}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        ) : (
+          <div className="text-center py-8 text-muted-foreground">
+            <Database className="h-12 w-12 mx-auto mb-4 opacity-50" />
+            <p className="font-medium mb-1">No hay datos disponibles</p>
+            <p className="text-sm mb-4">
+              {selectedDate 
+                ? `No se encontraron registros para la fecha seleccionada`
+                : 'No hay registros en la tabla inventario_control'}
+            </p>
+            <div className="text-xs text-muted-foreground space-y-1 bg-slate-50 p-3 rounded">
+              <p><strong>Estado de carga:</strong></p>
+              <p>• movimientosDB.length = {movimientosDB.length}</p>
+              <p>• loadingMovimientosDB = {String(loadingMovimientosDB)}</p>
+              <p>• Filtro de fecha = {selectedDate || 'ninguno'}</p>
+              <p className="mt-2 text-orange-600">
+                💡 Revisa la consola del navegador para ver más detalles de la carga de datos
+              </p>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

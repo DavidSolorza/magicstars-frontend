@@ -114,6 +114,9 @@ export const obtenerMovimientosInventario = async (
   filtros: FiltrosMovimientos = {}
 ): Promise<MovimientoInventario[]> => {
   try {
+    console.log('🔍 [Supabase] Iniciando consulta a inventario_control con filtros:', filtros);
+    
+    // Primero hacer una consulta simple sin filtros para verificar que funciona
     let query = supabaseInventario
       .from('inventario_control')
       .select('*');
@@ -135,35 +138,45 @@ export const obtenerMovimientosInventario = async (
     }
 
     // Filtrar por rango de fechas si se especifica
+    // Intentar con created_at primero (es el campo estándar en Supabase)
     if (filtros.fecha_desde) {
-      query = query.gte('fecha', filtros.fecha_desde);
+      query = query.gte('created_at', filtros.fecha_desde);
     }
     if (filtros.fecha_hasta) {
-      query = query.lte('fecha', filtros.fecha_hasta);
+      query = query.lte('created_at', filtros.fecha_hasta);
     }
 
-    // Intentar ordenar por fecha descendente (más recientes primero)
-    // Probamos con diferentes nombres posibles de campos de fecha
-    const camposFecha = ['fecha', 'created_at', 'timestamp', 'fecha_movimiento', 'fecha_creacion'];
-    let campoOrdenamiento: string | null = null;
+    // Intentar ordenar por created_at (más recientes primero)
+    // Si falla, continuaremos sin ordenamiento
+    let campoOrdenamiento: string | null = 'created_at';
     
-    for (const campo of camposFecha) {
-      try {
-        query = query.order(campo, { ascending: false });
-        campoOrdenamiento = campo;
-        break;
-      } catch {
-        // Continuar con el siguiente campo
+    try {
+      query = query.order('created_at', { ascending: false });
+    } catch (err) {
+      console.warn('⚠️ [Supabase] No se pudo ordenar por created_at, intentando otros campos:', err);
+      // Si created_at no funciona, intentar con otros campos
+      const camposFecha = ['fecha', 'timestamp', 'fecha_movimiento', 'fecha_creacion'];
+      campoOrdenamiento = null;
+      
+      for (const campo of camposFecha) {
+        try {
+          query = query.order(campo, { ascending: false });
+          campoOrdenamiento = campo;
+          break;
+        } catch {
+          // Continuar con el siguiente campo
+        }
       }
-    }
-    
-    // Si no se pudo ordenar por fecha, intentar por ID descendente
-    if (!campoOrdenamiento) {
-      try {
-        query = query.order('id', { ascending: false });
-        campoOrdenamiento = 'id';
-      } catch {
-        // Si no hay campo id, mantener el orden por defecto
+      
+      // Si no se pudo ordenar por fecha, intentar por ID descendente
+      if (!campoOrdenamiento) {
+        try {
+          query = query.order('id', { ascending: false });
+          campoOrdenamiento = 'id';
+        } catch {
+          // Si no hay campo id, mantener sin ordenamiento explícito
+          console.warn('⚠️ [Supabase] No se pudo aplicar ningún ordenamiento');
+        }
       }
     }
 
@@ -195,10 +208,10 @@ export const obtenerMovimientosInventario = async (
         }
 
         if (filtros.fecha_desde) {
-          pageQuery = pageQuery.gte('fecha', filtros.fecha_desde);
+          pageQuery = pageQuery.gte('created_at', filtros.fecha_desde);
         }
         if (filtros.fecha_hasta) {
-          pageQuery = pageQuery.lte('fecha', filtros.fecha_hasta);
+          pageQuery = pageQuery.lte('created_at', filtros.fecha_hasta);
         }
 
         // Aplicar ordenamiento (debe ir antes del range)
@@ -206,13 +219,21 @@ export const obtenerMovimientosInventario = async (
           try {
             pageQuery = pageQuery.order(campoOrdenamiento, { ascending: false });
           } catch {
-            // Si falla, intentar con los campos de fecha
-            for (const campo of camposFecha) {
-              try {
-                pageQuery = pageQuery.order(campo, { ascending: false });
-                break;
-              } catch {
-                // Continuar
+            // Si falla, intentar con created_at primero
+            try {
+              pageQuery = pageQuery.order('created_at', { ascending: false });
+              campoOrdenamiento = 'created_at';
+            } catch {
+              // Si falla, intentar con otros campos de fecha
+              const camposFecha = ['fecha', 'timestamp', 'fecha_movimiento', 'fecha_creacion'];
+              for (const campo of camposFecha) {
+                try {
+                  pageQuery = pageQuery.order(campo, { ascending: false });
+                  campoOrdenamiento = campo;
+                  break;
+                } catch {
+                  // Continuar
+                }
               }
             }
           }
@@ -224,8 +245,15 @@ export const obtenerMovimientosInventario = async (
         const { data: pageData, error: pageError } = await pageQuery;
 
         if (pageError) {
-          console.error('❌ Error al consultar página de inventario_control:', pageError);
-          break;
+          console.error('❌ [Supabase] Error al consultar página de inventario_control:', pageError);
+          console.error('❌ [Supabase] Detalles del error:', {
+            message: pageError.message,
+            details: pageError.details,
+            hint: pageError.hint,
+            code: pageError.code,
+          });
+          // Lanzar el error en lugar de solo hacer break para que se capture arriba
+          throw new Error(`Error de Supabase en paginación: ${pageError.message || 'Error desconocido'}`);
         }
 
         if (pageData && pageData.length > 0) {
@@ -242,20 +270,32 @@ export const obtenerMovimientosInventario = async (
 
     let movimientos: any[] = [];
 
-    if (!filtros.limit || filtros.limit <= 0 || filtros.limit > 10000) {
-      // Obtener todos los registros si no hay límite o el límite es muy alto
-      movimientos = await obtenerTodosLosRegistros();
-    } else {
-      // Si hay un límite razonable, aplicarlo directamente
+    // Intentar primero una consulta simple sin paginación para ver si hay errores
+    console.log('🔍 [Supabase] Ejecutando consulta a inventario_control...');
+    
+    // Si hay un límite razonable, usarlo directamente (más rápido)
+    if (filtros.limit && filtros.limit > 0 && filtros.limit <= 10000) {
       query = query.limit(filtros.limit);
       const { data, error } = await query;
 
       if (error) {
-        console.error('❌ Error al consultar tabla inventario_control:', error);
-        return [];
+        console.error('❌ [Supabase] Error al consultar tabla inventario_control:', error);
+        console.error('❌ [Supabase] Detalles del error:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code,
+        });
+        throw new Error(`Error de Supabase: ${error.message || 'Error desconocido'}`);
       }
 
       movimientos = data || [];
+      console.log(`✅ [Supabase] Consulta exitosa: ${movimientos.length} registros obtenidos`);
+    } else {
+      // Obtener todos los registros mediante paginación
+      console.log('📦 [Supabase] Obteniendo todos los registros mediante paginación...');
+      movimientos = await obtenerTodosLosRegistros();
+      console.log(`✅ [Supabase] Paginación completada: ${movimientos.length} registros obtenidos`);
     }
     
     // Si tenemos datos, intentar ordenarlos manualmente por fecha si no se ordenó correctamente
@@ -285,11 +325,21 @@ export const obtenerMovimientosInventario = async (
         {
           filtros: { ...filtros },
           total: movimientos.length,
+          primer_registro: movimientos.length > 0 ? movimientos[0] : null,
+          columnas: movimientos.length > 0 ? Object.keys(movimientos[0]) : [],
         },
         null,
         2
       )
     );
+
+    // Log adicional si no hay datos
+    if (movimientos.length === 0) {
+      console.warn('⚠️ No se obtuvieron registros de inventario_control. Verificar:');
+      console.warn('  - Que la tabla exista y tenga datos');
+      console.warn('  - Que los filtros no sean muy restrictivos');
+      console.warn('  - Que las políticas RLS permitan la lectura');
+    }
 
     return movimientos;
   } catch (error) {

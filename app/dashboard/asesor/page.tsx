@@ -2067,12 +2067,11 @@ export default function AsesorDashboard() {
                               size="sm"
                               variant="default"
                               onClick={() => handleConfirmOrder(order)}
-                              className="h-8 px-3 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white shadow-md hover:shadow-lg transition-all hover:scale-105 font-semibold flex items-center gap-1.5 w-full"
+                              className="h-8 w-16 p-0 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white shadow-md hover:shadow-lg transition-all hover:scale-105 flex items-center justify-center"
                               title="Confirmar pedido"
                               aria-label="Confirmar pedido"
                             >
                               <CheckCircle className="w-3.5 h-3.5" />
-                              <span className="text-xs">Confirmar</span>
                             </Button>
                           )}
                           <div className="flex gap-2 items-center justify-center">

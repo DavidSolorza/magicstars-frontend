@@ -36,7 +36,8 @@ import {
 import { Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { InventoryMovements } from '@/components/dashboard/inventory-movements';
-import { ProductFormModal } from '@/components/dashboard/product-form-modal';
+import { CreateProductModal } from '@/components/dashboard/create-product-modal';
+import { EditProductModal } from '@/components/dashboard/edit-product-modal';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
@@ -135,8 +136,9 @@ export default function AdvisorInventoryPage() {
   const [alertConfig, setAlertConfig] = useState<StockAlertConfig>({});
   const [alertConfigs, setAlertConfigs] = useState<Record<ProductKey, StockAlertConfig>>({});
   
-  // Estados para el modal de productos
-  const [showProductModal, setShowProductModal] = useState(false);
+  // Estados para los modales de productos
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<ProductoInventario | null>(null);
   
   // Estados para el modal de confirmación de eliminación
@@ -335,13 +337,12 @@ export default function AdvisorInventoryPage() {
 
   // Funciones para productos
   const handleCreateProduct = () => {
-    setEditingProduct(null);
-    setShowProductModal(true);
+    setShowCreateModal(true);
   };
 
   const handleEditProduct = (item: ProductoInventario) => {
     setEditingProduct(item);
-    setShowProductModal(true);
+    setShowEditModal(true);
   };
 
   const handleSaveProduct = async (productData: Omit<ProductoInventario, 'idx'>) => {
@@ -350,10 +351,8 @@ export default function AdvisorInventoryPage() {
       setError(null);
       
       // Determinar si es nuevo o editar basado en editingProduct
-      // Si editingProduct existe y tiene el mismo producto y tienda, es editar
-      const isEditing = editingProduct !== null && 
-        editingProduct.producto === productData.producto &&
-        normalizeStoreName(editingProduct.tienda) === normalizeStoreName(productData.tienda);
+      // Si editingProduct existe, es editar
+      const isEditing = editingProduct !== null;
       
       const tipoOperacion = isEditing ? 'editar' : 'nuevo';
       
@@ -396,8 +395,13 @@ export default function AdvisorInventoryPage() {
       
       console.log('✅ [Asesor] Producto guardado exitosamente:', result);
       
-      // Limpiar editingProduct después de guardar
-      setEditingProduct(null);
+      // Cerrar el modal correspondiente y limpiar estados
+      if (editingProduct) {
+        setShowEditModal(false);
+        setEditingProduct(null);
+      } else {
+        setShowCreateModal(false);
+      }
       
       // Recargar datos después de guardar
       await loadData();
@@ -1234,16 +1238,33 @@ export default function AdvisorInventoryPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Modal de Crear/Editar Producto */}
-      <ProductFormModal
-        open={showProductModal}
-        onOpenChange={setShowProductModal}
-        product={editingProduct}
+      {/* Modal de Crear Producto */}
+      <CreateProductModal
+        open={showCreateModal}
+        onOpenChange={setShowCreateModal}
         onSave={handleSaveProduct}
         stores={[user?.company?.name || 'ALL STARS']}
         hideStoreField={true}
         defaultStore={user?.company?.name || 'ALL STARS'}
       />
+
+      {/* Modal de Editar Producto */}
+      {editingProduct && (
+        <EditProductModal
+          open={showEditModal}
+          onOpenChange={(open) => {
+            setShowEditModal(open);
+            if (!open) {
+              setEditingProduct(null);
+            }
+          }}
+          product={editingProduct}
+          onSave={handleSaveProduct}
+          stores={[user?.company?.name || 'ALL STARS']}
+          hideStoreField={true}
+          defaultStore={user?.company?.name || 'ALL STARS'}
+        />
+      )}
 
       {/* Modal de Confirmación de Eliminación */}
       <Dialog open={showDeleteModal} onOpenChange={setShowDeleteModal}>
