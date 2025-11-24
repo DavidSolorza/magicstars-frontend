@@ -26,7 +26,7 @@ interface ProductFormModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   product?: ProductoInventario | null;
-  onSave: (product: Omit<ProductoInventario, 'idx'>) => void;
+  onSave: (product: Omit<ProductoInventario, 'idx'> & { stock_minimo?: number; stock_maximo?: number }) => void;
   stores?: string[];
   hideStoreField?: boolean; // Nueva prop para ocultar el campo de tienda
   defaultStore?: string; // Tienda por defecto cuando se oculta el campo
@@ -45,6 +45,8 @@ export function ProductFormModal({
     producto: '',
     cantidad: 0,
     tienda: stores[0] || '',
+    stock_minimo: 5,
+    stock_maximo: 20,
   });
 
   useEffect(() => {
@@ -57,12 +59,16 @@ export function ProductFormModal({
         producto: product.producto || '',
         cantidad: product.cantidad || 0,
         tienda: defaultTienda,
+        stock_minimo: 5,
+        stock_maximo: 20,
       });
     } else {
       setFormData({
         producto: '',
         cantidad: 0,
         tienda: defaultTienda,
+        stock_minimo: 5,
+        stock_maximo: 20,
       });
     }
   }, [product, stores, hideStoreField, defaultStore]);
@@ -72,7 +78,11 @@ export function ProductFormModal({
     if (!formData.producto.trim()) {
       return;
     }
-    onSave(formData);
+    onSave({
+      ...formData,
+      stock_minimo: formData.stock_minimo,
+      stock_maximo: formData.stock_maximo,
+    });
     onOpenChange(false);
   };
 
@@ -92,7 +102,7 @@ export function ProductFormModal({
             </div>
             <div className="min-w-0 flex-1">
               <DialogTitle className="text-lg leading-tight">
-                {isEditing ? 'Crear Nuevo Producto' : 'Crear Nuevo Producto'}
+                {isEditing ? 'Editar Producto' : 'Crear Nuevo Producto'}
               </DialogTitle>
               <DialogDescription className="mt-0.5 text-xs">
                 {isEditing
@@ -131,6 +141,40 @@ export function ProductFormModal({
                 setFormData({ ...formData, cantidad: parseInt(e.target.value, 10) || 0 })
               }
               placeholder="0"
+              className="h-9"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="stock_minimo" className="text-sm font-semibold">
+              Stock Mínimo
+            </Label>
+            <Input
+              id="stock_minimo"
+              type="number"
+              min="0"
+              value={formData.stock_minimo}
+              onChange={(e) =>
+                setFormData({ ...formData, stock_minimo: parseInt(e.target.value, 10) || 0 })
+              }
+              placeholder="5"
+              className="h-9"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="stock_maximo" className="text-sm font-semibold">
+              Stock Máximo
+            </Label>
+            <Input
+              id="stock_maximo"
+              type="number"
+              min="1"
+              value={formData.stock_maximo}
+              onChange={(e) =>
+                setFormData({ ...formData, stock_maximo: parseInt(e.target.value, 10) || 20 })
+              }
+              placeholder="20"
               className="h-9"
             />
           </div>

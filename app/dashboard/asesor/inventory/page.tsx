@@ -36,8 +36,7 @@ import {
 import { Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { InventoryMovements } from '@/components/dashboard/inventory-movements';
-import { CreateProductModal } from '@/components/dashboard/create-product-modal';
-import { EditProductModal } from '@/components/dashboard/edit-product-modal';
+import { ProductFormModal } from '@/components/dashboard/product-form-modal';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
@@ -136,9 +135,8 @@ export default function AdvisorInventoryPage() {
   const [alertConfig, setAlertConfig] = useState<StockAlertConfig>({});
   const [alertConfigs, setAlertConfigs] = useState<Record<ProductKey, StockAlertConfig>>({});
   
-  // Estados para los modales de productos
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
+  // Estados para el modal de productos
+  const [showProductModal, setShowProductModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<ProductoInventario | null>(null);
   
   // Estados para el modal de confirmación de eliminación
@@ -337,36 +335,36 @@ export default function AdvisorInventoryPage() {
 
   // Funciones para productos
   const handleCreateProduct = () => {
-    setShowCreateModal(true);
+    setEditingProduct(null);
+    setShowProductModal(true);
   };
 
   const handleEditProduct = (item: ProductoInventario) => {
     setEditingProduct(item);
-    setShowEditModal(true);
+    setShowProductModal(true);
   };
 
-  const handleSaveProduct = async (productData: Omit<ProductoInventario, 'idx'>) => {
+  const handleSaveProduct = async (productData: Omit<ProductoInventario, 'idx'> & { stock_minimo?: number; stock_maximo?: number }) => {
     try {
       setLoading(true);
       setError(null);
       
       // Determinar si es nuevo o editar basado en editingProduct
-      // Si editingProduct existe, es editar
       const isEditing = editingProduct !== null;
-      
       const tipoOperacion = isEditing ? 'editar' : 'nuevo';
       
-      // Obtener configuración de alertas para este producto si existe
+      // Obtener configuración de alertas para este producto si existe (como fallback)
       const productKey = getProductKey(productData.tienda, productData.producto);
       const alertConfig = alertConfigs[productKey];
       
-      // Preparar payload para el endpoint
+      // Preparar payload exactamente como lo requiere el webhook
+      // Formato: producto, cantidad, tienda, stock_minimo, stock_maximo, tipo_operacion, usuario
       const payload = {
-        producto: productData.producto,
+        producto: productData.producto.trim(),
         cantidad: productData.cantidad || 0,
-        tienda: productData.tienda,
-        stock_minimo: alertConfig?.stockMinimo ?? DEFAULT_MINIMUM_STOCK,
-        stock_maximo: alertConfig?.stockMaximo ?? DEFAULT_MAXIMUM_STOCK,
+        tienda: productData.tienda.trim(),
+        stock_minimo: productData.stock_minimo ?? alertConfig?.stockMinimo ?? DEFAULT_MINIMUM_STOCK,
+        stock_maximo: productData.stock_maximo ?? alertConfig?.stockMaximo ?? DEFAULT_MAXIMUM_STOCK,
         tipo_operacion: tipoOperacion,
         usuario: user?.name || user?.email || 'asesor',
       };
@@ -395,12 +393,12 @@ export default function AdvisorInventoryPage() {
       
       console.log('✅ [Asesor] Producto guardado exitosamente:', result);
       
-      // Cerrar el modal correspondiente y limpiar estados
+      // Cerrar el modal y limpiar estados
       if (editingProduct) {
-        setShowEditModal(false);
+        setShowProductModal(false);
         setEditingProduct(null);
       } else {
-        setShowCreateModal(false);
+        setShowProductModal(false);
       }
       
       // Recargar datos después de guardar
@@ -427,53 +425,38 @@ export default function AdvisorInventoryPage() {
       setError(null);
       
       // Buscar el producto original en la base de datos para obtener el nombre exacto
-      // Esto asegura que usemos el nombre tal cual está almacenado en la BD
+      // Esto es importante porque el nombre en la UI puede tener trim() aplicado
       const productoOriginal = productosOriginales.find(
-        (p) => p.producto === productToDelete.producto && 
-               normalizeStoreName(p.tienda) === normalizeStoreName(productToDelete.tienda)
-      ) || productToDelete;
+        (p) => {
+          // Comparar por nombre (sin case sensitive) y tienda
+          const nombreMatch = p.producto?.toLowerCase().trim() === productToDelete.producto?.toLowerCase().trim();
+          const tiendaMatch = normalizeStoreName(p.tienda) === normalizeStoreName(productToDelete.tienda);
+          return nombreMatch && tiendaMatch;
+        }
+      );
       
-      // Usar el nombre exacto del producto original de la base de datos (sin trim para preservar espacios exactos)
-      const productoNombre = productoOriginal.producto || productToDelete.producto || '';
-      const tiendaNombre = productoOriginal.tienda || productToDelete.tienda || null;
+      // Usar el nombre exacto del producto original de la BD (sin trim para preservar espacios exactos)
+      const productoNombre = productoOriginal?.producto || productToDelete.producto || '';
       
       if (!productoNombre || productoNombre.trim().length === 0) {
         throw new Error('El nombre del producto no puede estar vacío');
       }
       
-      // Log completo de información del producto antes de eliminar
-      console.log('🗑️ [Asesor] Información completa del producto a eliminar:', {
-        producto_nombre_enviado: productoNombre,
-        producto_nombre_original_bd: productoOriginal.producto,
-        producto_nombre_desde_ui: productToDelete.producto,
-        tienda: tiendaNombre,
-        cantidad: productToDelete.cantidad,
-        producto_completo: productToDelete,
-        producto_original_bd: productoOriginal,
+      console.log('🗑️ [Asesor] Información del producto a eliminar:', {
+        nombre_en_ui: productToDelete.producto,
+        nombre_original_bd: productoOriginal?.producto,
+        nombre_que_se_envia: productoNombre,
+        producto_original_encontrado: !!productoOriginal,
       });
       
-      // Preparar payload según el formato del webhook
-      // El formato base requiere: producto, tipo_operacion, usuario
-      // Pero incluimos tienda por si el webhook la necesita para encontrar el producto exacto
-      const payload: any = {
-        producto: productoNombre,
+      // Preparar payload para eliminar - solo los 3 campos requeridos
+      const payload = {
+        producto: productoNombre, // Usar el nombre exacto de la BD
         tipo_operacion: 'eliminar',
-        usuario: user?.name || user?.email || 'admin',
+        usuario: user?.name || user?.email || 'asesor',
       };
       
-      // Si hay tienda, incluirla puede ayudar al webhook a encontrar el producto
-      // aunque según la documentación solo se requieren los 3 campos básicos
-      if (tiendaNombre) {
-        payload.tienda = tiendaNombre;
-      }
-      
-      console.log('🗑️ [Asesor] Payload que se enviará al webhook:', JSON.stringify(payload, null, 2));
-      console.log('🗑️ [Asesor] Comparación de nombres:', {
-        nombre_en_ui: productToDelete.producto,
-        nombre_original_bd: productoOriginal.producto,
-        nombre_que_se_envia: productoNombre,
-        son_iguales: productToDelete.producto === productoOriginal.producto,
-      });
+      console.log('🗑️ [Asesor] Eliminando producto:', payload);
       
       // Llamar al endpoint
       const response = await fetch('/api/inventory', {
@@ -508,7 +491,7 @@ export default function AdvisorInventoryPage() {
         
         // Si el error es "No item to return was found", mostrar mensaje más claro
         if (result.details && typeof result.details === 'string' && result.details.includes('No item to return was found')) {
-          errorMessage = `El producto "${productoNombre}"${tiendaNombre ? ` en la tienda "${tiendaNombre}"` : ''} no se encontró en el inventario. Verifica que el nombre coincida exactamente (incluyendo mayúsculas, minúsculas y espacios). Revisa la consola para más detalles.`;
+          errorMessage = `El producto "${productoNombre}" no se encontró en el inventario. Verifica que el nombre coincida exactamente (incluyendo mayúsculas, minúsculas y espacios).`;
         } else if (result.status && result.status !== 200) {
           // Si hay un código de estado de error del webhook
           errorMessage = `Error del servidor (${result.status}): ${errorMessage}. Revisa la consola para ver los detalles completos.`;
@@ -1238,33 +1221,16 @@ export default function AdvisorInventoryPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Modal de Crear Producto */}
-      <CreateProductModal
-        open={showCreateModal}
-        onOpenChange={setShowCreateModal}
+      {/* Modal de Crear/Editar Producto */}
+      <ProductFormModal
+        open={showProductModal}
+        onOpenChange={setShowProductModal}
+        product={editingProduct}
         onSave={handleSaveProduct}
         stores={[user?.company?.name || 'ALL STARS']}
         hideStoreField={true}
         defaultStore={user?.company?.name || 'ALL STARS'}
       />
-
-      {/* Modal de Editar Producto */}
-      {editingProduct && (
-        <EditProductModal
-          open={showEditModal}
-          onOpenChange={(open) => {
-            setShowEditModal(open);
-            if (!open) {
-              setEditingProduct(null);
-            }
-          }}
-          product={editingProduct}
-          onSave={handleSaveProduct}
-          stores={[user?.company?.name || 'ALL STARS']}
-          hideStoreField={true}
-          defaultStore={user?.company?.name || 'ALL STARS'}
-        />
-      )}
 
       {/* Modal de Confirmación de Eliminación */}
       <Dialog open={showDeleteModal} onOpenChange={setShowDeleteModal}>

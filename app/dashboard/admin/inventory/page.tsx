@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useAuth } from '@/contexts/auth-context';
 import { obtenerInventario, ProductoInventario } from '@/lib/supabase-inventario';
 import { StatsCard } from '@/components/dashboard/stats-card';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -112,6 +113,7 @@ const getStatusInfo = (
 };
 
 export default function AdminInventoryPage() {
+  const { user } = useAuth();
   const [inventory, setInventory] = useState<ProductoInventario[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -215,36 +217,38 @@ export default function AdminInventoryPage() {
     setShowProductModal(true);
   };
 
-  const handleSaveProduct = async (productData: Omit<ProductoInventario, 'idx'>) => {
+  const handleSaveProduct = async (productData: Omit<ProductoInventario, 'idx'> & { stock_minimo?: number; stock_maximo?: number }) => {
     try {
       setLoading(true);
       setError(null);
       
-      // Determinar si es nuevo o editar basado en si el producto ya existe
-      const productoExiste = inventory.some(
-        (item) => 
-          item.producto === productData.producto && 
-          normalizeStoreName(item.tienda) === normalizeStoreName(productData.tienda)
-      );
+      // Determinar si es nuevo o editar basado en editingProduct
+      const isEditing = editingProduct !== null;
+      const tipoOperacion = isEditing ? 'editar' : 'nuevo';
       
-      const tipoOperacion = productoExiste ? 'editar' : 'nuevo';
-      
-      // Obtener configuración de alertas para este producto si existe
+      // Obtener configuración de alertas para este producto si existe (como fallback)
       const productKey = getProductKey(productData.tienda, productData.producto);
       const alertConfig = alertConfigs[productKey];
       
-      // Preparar payload para el endpoint
+      // Preparar payload exactamente como lo requiere el webhook
+      // Formato: producto, cantidad, tienda, stock_minimo, stock_maximo, tipo_operacion, usuario
       const payload = {
-        producto: productData.producto,
+        producto: productData.producto.trim(),
         cantidad: productData.cantidad || 0,
-        tienda: productData.tienda,
-        stock_minimo: alertConfig?.stockMinimo ?? DEFAULT_MINIMUM_STOCK,
-        stock_maximo: alertConfig?.stockMaximo ?? DEFAULT_MAXIMUM_STOCK,
+        tienda: productData.tienda.trim(),
+        stock_minimo: productData.stock_minimo ?? alertConfig?.stockMinimo ?? DEFAULT_MINIMUM_STOCK,
+        stock_maximo: productData.stock_maximo ?? alertConfig?.stockMaximo ?? DEFAULT_MAXIMUM_STOCK,
         tipo_operacion: tipoOperacion,
-        usuario: 'admin', // TODO: Obtener del contexto de autenticación
+        usuario: user?.name || user?.email || 'admin',
       };
       
-      console.log('📤 Enviando producto al endpoint:', payload);
+      console.log('📤 [Admin] Enviando producto al endpoint:', {
+        tipo_operacion: tipoOperacion,
+        producto: payload.producto,
+        es_edicion: isEditing,
+        editingProduct: editingProduct,
+        usuario: payload.usuario,
+      });
       
       // Llamar al endpoint
       const response = await fetch('/api/inventory', {
@@ -261,13 +265,21 @@ export default function AdminInventoryPage() {
         throw new Error(result.error || result.message || 'Error al guardar el producto');
       }
       
-      console.log('✅ Producto guardado exitosamente:', result);
+      console.log('✅ [Admin] Producto guardado exitosamente:', result);
+      
+      // Cerrar el modal y limpiar estados
+      if (editingProduct) {
+        setShowProductModal(false);
+        setEditingProduct(null);
+      } else {
+        setShowProductModal(false);
+      }
       
       // Recargar inventario después de guardar
       await loadInventory();
       
     } catch (err) {
-      console.error('❌ Error al guardar producto:', err);
+      console.error('❌ [Admin] Error al guardar producto:', err);
       setError(err instanceof Error ? err.message : 'Error al guardar el producto');
     } finally {
       setLoading(false);
@@ -286,14 +298,38 @@ export default function AdminInventoryPage() {
       setLoading(true);
       setError(null);
       
-      // Preparar payload para eliminar
+      // Buscar el producto original en el inventario para obtener el nombre exacto
+      // Esto es importante porque el nombre puede tener diferencias de formato
+      const productoOriginal = inventory.find(
+        (p) => {
+          const nombreMatch = p.producto?.toLowerCase().trim() === productToDelete.producto?.toLowerCase().trim();
+          const tiendaMatch = normalizeStoreName(p.tienda) === normalizeStoreName(productToDelete.tienda);
+          return nombreMatch && tiendaMatch;
+        }
+      );
+      
+      // Usar el nombre exacto del producto original de la BD (sin trim para preservar espacios exactos)
+      const productoNombre = productoOriginal?.producto || productToDelete.producto || '';
+      
+      if (!productoNombre || productoNombre.trim().length === 0) {
+        throw new Error('El nombre del producto no puede estar vacío');
+      }
+      
+      console.log('🗑️ [Admin] Información del producto a eliminar:', {
+        nombre_en_ui: productToDelete.producto,
+        nombre_original_bd: productoOriginal?.producto,
+        nombre_que_se_envia: productoNombre,
+        producto_original_encontrado: !!productoOriginal,
+      });
+      
+      // Preparar payload para eliminar - solo los 3 campos requeridos
       const payload = {
-        producto: productToDelete.producto,
+        producto: productoNombre, // Usar el nombre exacto de la BD
         tipo_operacion: 'eliminar',
-        usuario: 'admin', // TODO: Obtener del contexto de autenticación
+        usuario: user?.name || user?.email || 'admin',
       };
       
-      console.log('🗑️ Eliminando producto:', payload);
+      console.log('🗑️ [Admin] Eliminando producto:', payload);
       
       // Llamar al endpoint
       const response = await fetch('/api/inventory', {

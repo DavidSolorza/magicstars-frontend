@@ -162,7 +162,6 @@ export async function POST(request: NextRequest) {
     
     if (tipoOperacion === 'eliminar') {
       // Para eliminar: solo producto, tipo_operacion y usuario (exactamente como lo espera el webhook)
-      // Mantener el orden: producto, tipo_operacion, usuario
       // NO hacer trim() en el nombre del producto para preservar el formato exacto de la BD
       payload = {
         producto: String(body.producto || ''), // Sin trim para preservar espacios exactos
@@ -170,13 +169,7 @@ export async function POST(request: NextRequest) {
         usuario: String(body.usuario || '').trim(),
       };
       
-      // Si viene tienda en el body, incluirla puede ayudar al webhook a encontrar el producto
-      // aunque no es requerida según la documentación
-      if (body.tienda && String(body.tienda).trim()) {
-        payload.tienda = String(body.tienda).trim();
-      }
-      
-      // Verificar que el payload tenga los campos requeridos (tienda es opcional)
+      // Verificar que el payload tenga los campos requeridos
       const camposRequeridos = ['producto', 'tipo_operacion', 'usuario'];
       const camposEnPayload = Object.keys(payload);
       
@@ -188,17 +181,10 @@ export async function POST(request: NextRequest) {
         });
       }
       
-      // Log adicional para debugging
-      console.log('📤 [API] Payload de eliminación preparado:', {
-        tiene_producto: !!payload.producto,
-        tiene_tienda: !!payload.tienda,
-        nombre_producto_longitud: payload.producto?.length,
-        nombre_producto_primeros_chars: payload.producto?.substring(0, 50),
-      });
-      
-      console.log('📤 [API] Payload para ELIMINAR (formato exacto del workflow):', JSON.stringify(payload, null, 2));
+      console.log('📤 [API] Payload para ELIMINAR:', JSON.stringify(payload, null, 2));
     } else {
-      // Para nuevo/editar: todos los campos
+      // Para nuevo/editar: todos los campos exactamente como lo requiere el webhook
+      // Formato: producto, cantidad, tienda, stock_minimo, stock_maximo, tipo_operacion, usuario
       payload = {
         producto: String(body.producto).trim(),
         cantidad: Number(body.cantidad),
