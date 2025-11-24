@@ -163,23 +163,38 @@ export async function POST(request: NextRequest) {
     if (tipoOperacion === 'eliminar') {
       // Para eliminar: solo producto, tipo_operacion y usuario (exactamente como lo espera el webhook)
       // Mantener el orden: producto, tipo_operacion, usuario
+      // NO hacer trim() en el nombre del producto para preservar el formato exacto de la BD
       payload = {
-        producto: String(body.producto).trim(),
+        producto: String(body.producto || ''), // Sin trim para preservar espacios exactos
         tipo_operacion: 'eliminar',
-        usuario: String(body.usuario).trim(),
+        usuario: String(body.usuario || '').trim(),
       };
       
-      // Verificar que el payload tenga exactamente los 3 campos requeridos
+      // Si viene tienda en el body, incluirla puede ayudar al webhook a encontrar el producto
+      // aunque no es requerida según la documentación
+      if (body.tienda && String(body.tienda).trim()) {
+        payload.tienda = String(body.tienda).trim();
+      }
+      
+      // Verificar que el payload tenga los campos requeridos (tienda es opcional)
       const camposRequeridos = ['producto', 'tipo_operacion', 'usuario'];
       const camposEnPayload = Object.keys(payload);
       
-      if (camposEnPayload.length !== 3 || !camposRequeridos.every(campo => camposEnPayload.includes(campo))) {
+      if (!camposRequeridos.every(campo => camposEnPayload.includes(campo))) {
         console.error('❌ [API] Error: Payload de eliminación no tiene los campos correctos', {
           campos_esperados: camposRequeridos,
           campos_encontrados: camposEnPayload,
           payload: payload,
         });
       }
+      
+      // Log adicional para debugging
+      console.log('📤 [API] Payload de eliminación preparado:', {
+        tiene_producto: !!payload.producto,
+        tiene_tienda: !!payload.tienda,
+        nombre_producto_longitud: payload.producto?.length,
+        nombre_producto_primeros_chars: payload.producto?.substring(0, 50),
+      });
       
       console.log('📤 [API] Payload para ELIMINAR (formato exacto del workflow):', JSON.stringify(payload, null, 2));
     } else {

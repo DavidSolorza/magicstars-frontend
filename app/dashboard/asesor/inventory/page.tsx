@@ -31,6 +31,7 @@ import {
   Trash2,
   Filter,
   Warehouse,
+  BookOpen,
 } from 'lucide-react';
 import { Loader2 } from 'lucide-react';
 import Link from 'next/link';
@@ -38,6 +39,7 @@ import { InventoryMovements } from '@/components/dashboard/inventory-movements';
 import { ProductFormModal } from '@/components/dashboard/product-form-modal';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
+import { useToast } from '@/hooks/use-toast';
 
 const DEFAULT_MINIMUM_STOCK = 5;
 const DEFAULT_MAXIMUM_STOCK = 100; // Límite provisional de 100
@@ -116,7 +118,9 @@ const getStatusInfo = (
 
 export default function AdvisorInventoryPage() {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
+  const [productosOriginales, setProductosOriginales] = useState<ProductoInventario[]>([]); // Guardar productos originales de la BD
   const [stats, setStats] = useState<InventoryStats | null>(null);
   const [alerts, setAlerts] = useState<InventoryAlert[]>([]);
   const [transactions, setTransactions] = useState<InventoryTransaction[]>([]);
@@ -138,6 +142,9 @@ export default function AdvisorInventoryPage() {
   // Estados para el modal de confirmación de eliminación
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [productToDelete, setProductToDelete] = useState<ProductoInventario | null>(null);
+  
+  // Estado para productos agregando al diccionario
+  const [addingToDictionary, setAddingToDictionary] = useState<Set<string>>(new Set());
 
   const resolveCompanyInfo = (): Company => {
     const now = new Date().toISOString();
@@ -261,6 +268,10 @@ export default function AdvisorInventoryPage() {
       setLoading(true);
       const storeName = user.company?.name ?? user.companyId ?? 'ALL STARS';
       const productos = await obtenerInventarioPorTienda(storeName);
+      
+      // Guardar productos originales de la base de datos para usar el nombre exacto
+      setProductosOriginales(productos);
+      
       const mappedItems = mapProductosToInventoryItems(productos);
       const computedStats = buildInventoryStats(mappedItems);
       const computedAlerts = buildInventoryAlerts(mappedItems);
@@ -411,14 +422,54 @@ export default function AdvisorInventoryPage() {
       setLoading(true);
       setError(null);
       
-      // Preparar payload para eliminar
-      const payload = {
-        producto: productToDelete.producto,
+      // Buscar el producto original en la base de datos para obtener el nombre exacto
+      // Esto asegura que usemos el nombre tal cual está almacenado en la BD
+      const productoOriginal = productosOriginales.find(
+        (p) => p.producto === productToDelete.producto && 
+               normalizeStoreName(p.tienda) === normalizeStoreName(productToDelete.tienda)
+      ) || productToDelete;
+      
+      // Usar el nombre exacto del producto original de la base de datos (sin trim para preservar espacios exactos)
+      const productoNombre = productoOriginal.producto || productToDelete.producto || '';
+      const tiendaNombre = productoOriginal.tienda || productToDelete.tienda || null;
+      
+      if (!productoNombre || productoNombre.trim().length === 0) {
+        throw new Error('El nombre del producto no puede estar vacío');
+      }
+      
+      // Log completo de información del producto antes de eliminar
+      console.log('🗑️ [Asesor] Información completa del producto a eliminar:', {
+        producto_nombre_enviado: productoNombre,
+        producto_nombre_original_bd: productoOriginal.producto,
+        producto_nombre_desde_ui: productToDelete.producto,
+        tienda: tiendaNombre,
+        cantidad: productToDelete.cantidad,
+        producto_completo: productToDelete,
+        producto_original_bd: productoOriginal,
+      });
+      
+      // Preparar payload según el formato del webhook
+      // El formato base requiere: producto, tipo_operacion, usuario
+      // Pero incluimos tienda por si el webhook la necesita para encontrar el producto exacto
+      const payload: any = {
+        producto: productoNombre,
         tipo_operacion: 'eliminar',
-        usuario: user?.name || user?.email || 'asesor',
+        usuario: user?.name || user?.email || 'admin',
       };
       
-      console.log('🗑️ [Asesor] Eliminando producto:', payload);
+      // Si hay tienda, incluirla puede ayudar al webhook a encontrar el producto
+      // aunque según la documentación solo se requieren los 3 campos básicos
+      if (tiendaNombre) {
+        payload.tienda = tiendaNombre;
+      }
+      
+      console.log('🗑️ [Asesor] Payload que se enviará al webhook:', JSON.stringify(payload, null, 2));
+      console.log('🗑️ [Asesor] Comparación de nombres:', {
+        nombre_en_ui: productToDelete.producto,
+        nombre_original_bd: productoOriginal.producto,
+        nombre_que_se_envia: productoNombre,
+        son_iguales: productToDelete.producto === productoOriginal.producto,
+      });
       
       // Llamar al endpoint
       const response = await fetch('/api/inventory', {
@@ -431,33 +482,65 @@ export default function AdvisorInventoryPage() {
       
       const result = await response.json();
       
+      // Log completo de la respuesta
+      console.log('📥 [Asesor] Respuesta completa del servidor:', {
+        status: response.status,
+        ok: response.ok,
+        result: result,
+      });
+      
       if (!response.ok || !result.success) {
         // Construir mensaje de error más detallado y amigable
         let errorMessage = result.message || result.error || 'Error al eliminar el producto';
         
+        // Log detallado del error
+        console.error('❌ [Asesor] Error completo del servidor:', {
+          status: response.status,
+          result: result,
+          details: result.details,
+          error_respuesta: result.error_respuesta,
+          payload_enviado: result.payload_enviado,
+        });
+        
         // Si el error es "No item to return was found", mostrar mensaje más claro
-        if (result.details && result.details.includes('No item to return was found')) {
-          errorMessage = `El producto "${productToDelete.producto}" no se encontró en el inventario. Puede que ya haya sido eliminado o que el nombre no coincida exactamente.`;
+        if (result.details && typeof result.details === 'string' && result.details.includes('No item to return was found')) {
+          errorMessage = `El producto "${productoNombre}"${tiendaNombre ? ` en la tienda "${tiendaNombre}"` : ''} no se encontró en el inventario. Verifica que el nombre coincida exactamente (incluyendo mayúsculas, minúsculas y espacios). Revisa la consola para más detalles.`;
+        } else if (result.status && result.status !== 200) {
+          // Si hay un código de estado de error del webhook
+          errorMessage = `Error del servidor (${result.status}): ${errorMessage}. Revisa la consola para ver los detalles completos.`;
         } else if (result.details) {
           // Intentar parsear el JSON del details
           try {
-            const detailsObj = JSON.parse(result.details);
+            const detailsObj = typeof result.details === 'string' ? JSON.parse(result.details) : result.details;
             if (detailsObj.message) {
               errorMessage = detailsObj.message;
+            } else if (detailsObj.error) {
+              errorMessage = detailsObj.error;
             }
           } catch {
             // Si no es JSON, usar el texto tal cual
-            if (result.details.length < 200) {
+            if (typeof result.details === 'string' && result.details.length < 500) {
               errorMessage = result.details;
             }
           }
         }
         
-        console.error('❌ [Asesor] Error detallado del servidor:', result);
+        // Si hay información adicional del error en la respuesta
+        if (result.error_respuesta) {
+          console.error('❌ [Asesor] Error respuesta del webhook:', result.error_respuesta);
+        }
+        
         throw new Error(errorMessage);
       }
       
       console.log('✅ [Asesor] Producto eliminado exitosamente:', result);
+      
+      // Mostrar mensaje de éxito
+      toast({
+        title: '✅ Producto eliminado',
+        description: `El producto "${productoNombre}" ha sido eliminado exitosamente del inventario.`,
+        variant: 'default',
+      });
       
       // Eliminar configuración de alertas si existe
       const productKey = getProductKey(productToDelete.tienda, productToDelete.producto);
@@ -475,9 +558,74 @@ export default function AdvisorInventoryPage() {
       
     } catch (err) {
       console.error('❌ [Asesor] Error al eliminar producto:', err);
-      setError(err instanceof Error ? err.message : 'Error al eliminar el producto');
+      const errorMessage = err instanceof Error ? err.message : 'Error al eliminar el producto';
+      setError(errorMessage);
+      toast({
+        title: '❌ Error al eliminar producto',
+        description: errorMessage,
+        variant: 'destructive',
+      });
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Función para agregar producto al diccionario
+  const handleAddToDictionary = async (producto: ProductoInventario) => {
+    const productName = producto.producto;
+    
+    // Verificar si ya se está agregando
+    if (addingToDictionary.has(productName)) {
+      return;
+    }
+    
+    try {
+      // Agregar al set de productos en proceso
+      setAddingToDictionary(prev => new Set(prev).add(productName));
+      
+      console.log('📚 [Asesor] Agregando producto al diccionario:', productName);
+      
+      // Llamar al endpoint de diccionario
+      const response = await fetch('/api/inventory/dictionary', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          producto_existente: productName,
+        }),
+      });
+      
+      const result = await response.json();
+      
+      if (!response.ok || !result.success) {
+        const errorMessage = result.message || result.error || 'Error al agregar el producto al diccionario';
+        console.error('❌ [Asesor] Error al agregar al diccionario:', result);
+        throw new Error(errorMessage);
+      }
+      
+      console.log('✅ [Asesor] Producto agregado al diccionario exitosamente:', result);
+      
+      toast({
+        title: '✅ Producto agregado al diccionario',
+        description: `"${productName}" ha sido agregado exitosamente al diccionario.`,
+        variant: 'default',
+      });
+      
+    } catch (err) {
+      console.error('❌ [Asesor] Error al agregar producto al diccionario:', err);
+      toast({
+        title: '❌ Error al agregar al diccionario',
+        description: err instanceof Error ? err.message : 'Ocurrió un error al agregar el producto al diccionario',
+        variant: 'destructive',
+      });
+    } finally {
+      // Remover del set de productos en proceso
+      setAddingToDictionary(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(productName);
+        return newSet;
+      });
     }
   };
 
@@ -861,6 +1009,20 @@ export default function AdvisorInventoryPage() {
                             <TableCell className="text-center">
                               {producto && (
                                 <div className="flex items-center justify-center gap-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleAddToDictionary(producto)}
+                                    className="h-8 w-8 p-0"
+                                    title="Agregar al diccionario"
+                                    disabled={addingToDictionary.has(producto.producto)}
+                                  >
+                                    {addingToDictionary.has(producto.producto) ? (
+                                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                                    ) : (
+                                      <BookOpen className="h-4 w-4 text-muted-foreground hover:text-blue-600" />
+                                    )}
+                                  </Button>
                                   <Button
                                     variant="ghost"
                                     size="sm"
