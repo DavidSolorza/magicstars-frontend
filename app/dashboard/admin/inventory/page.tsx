@@ -217,7 +217,7 @@ export default function AdminInventoryPage() {
     setShowProductModal(true);
   };
 
-  const handleSaveProduct = async (productData: Omit<ProductoInventario, 'idx'>) => {
+  const handleSaveProduct = async (productData: Omit<ProductoInventario, 'idx'> & { stock_minimo?: number; stock_maximo?: number }) => {
     try {
       setLoading(true);
       setError(null);
@@ -227,17 +227,18 @@ export default function AdminInventoryPage() {
       const isEditing = editingProduct !== null;
       const tipoOperacion = isEditing ? 'editar' : 'nuevo';
       
-      // Obtener configuración de alertas para este producto si existe
+      // Obtener configuración de alertas para este producto si existe (como fallback)
       const productKey = getProductKey(productData.tienda, productData.producto);
       const alertConfig = alertConfigs[productKey];
       
       // Preparar payload para el endpoint
+      // Usar los valores del formulario si están disponibles, sino usar los de localStorage, sino valores por defecto
       const payload = {
         producto: productData.producto,
         cantidad: productData.cantidad || 0,
         tienda: productData.tienda,
-        stock_minimo: alertConfig?.stockMinimo ?? DEFAULT_MINIMUM_STOCK,
-        stock_maximo: alertConfig?.stockMaximo ?? DEFAULT_MAXIMUM_STOCK,
+        stock_minimo: productData.stock_minimo ?? alertConfig?.stockMinimo ?? DEFAULT_MINIMUM_STOCK,
+        stock_maximo: productData.stock_maximo ?? alertConfig?.stockMaximo ?? DEFAULT_MAXIMUM_STOCK,
         tipo_operacion: tipoOperacion,
         usuario: user?.name || user?.email || 'admin',
       };
@@ -298,14 +299,38 @@ export default function AdminInventoryPage() {
       setLoading(true);
       setError(null);
       
-      // Preparar payload para eliminar
+      // Buscar el producto original en el inventario para obtener el nombre exacto
+      // Esto es importante porque el nombre puede tener diferencias de formato
+      const productoOriginal = inventory.find(
+        (p) => {
+          const nombreMatch = p.producto?.toLowerCase().trim() === productToDelete.producto?.toLowerCase().trim();
+          const tiendaMatch = normalizeStoreName(p.tienda) === normalizeStoreName(productToDelete.tienda);
+          return nombreMatch && tiendaMatch;
+        }
+      );
+      
+      // Usar el nombre exacto del producto original de la BD (sin trim para preservar espacios exactos)
+      const productoNombre = productoOriginal?.producto || productToDelete.producto || '';
+      
+      if (!productoNombre || productoNombre.trim().length === 0) {
+        throw new Error('El nombre del producto no puede estar vacío');
+      }
+      
+      console.log('🗑️ [Admin] Información del producto a eliminar:', {
+        nombre_en_ui: productToDelete.producto,
+        nombre_original_bd: productoOriginal?.producto,
+        nombre_que_se_envia: productoNombre,
+        producto_original_encontrado: !!productoOriginal,
+      });
+      
+      // Preparar payload para eliminar - solo los 3 campos requeridos
       const payload = {
-        producto: productToDelete.producto,
+        producto: productoNombre, // Usar el nombre exacto de la BD
         tipo_operacion: 'eliminar',
         usuario: user?.name || user?.email || 'admin',
       };
       
-      console.log('🗑️ Eliminando producto:', payload);
+      console.log('🗑️ [Admin] Eliminando producto:', payload);
       
       // Llamar al endpoint
       const response = await fetch('/api/inventory', {

@@ -39,6 +39,16 @@ export function InventoryMovements({ productos, limit = 20 }: InventoryMovements
   const [error, setError] = useState<string | null>(null);
   const [reloadTrigger, setReloadTrigger] = useState(0);
 
+  // Función helper para obtener fecha en zona horaria de Costa Rica (UTC-6)
+  const getCostaRicaDate = (date?: Date) => {
+    const baseDate = date || new Date();
+    // Costa Rica está en GMT-6 (UTC-6)
+    const costaRicaOffset = -6 * 60; // -6 horas en minutos
+    const utc = baseDate.getTime() + (baseDate.getTimezoneOffset() * 60000);
+    const costaRicaTime = new Date(utc + (costaRicaOffset * 60000));
+    return costaRicaTime;
+  };
+
   // Cargar movimientos desde la base de datos (tabla inventario_control)
   useEffect(() => {
     const loadMovimientos = async () => {
@@ -50,14 +60,27 @@ export function InventoryMovements({ productos, limit = 20 }: InventoryMovements
 
         if (selectedDate) {
           // Si hay fecha seleccionada, filtrar por ese día completo
-          // Para created_at necesitamos el formato completo con hora
-          const startDate = new Date(selectedDate);
-          startDate.setHours(0, 0, 0, 0);
-          fechaDesde = startDate.toISOString();
+          // selectedDate viene en formato YYYY-MM-DD del input type="date"
+          // Crear el rango para el día completo en la zona horaria local del navegador
+          // y luego convertir a UTC para la consulta
+          const [year, month, day] = selectedDate.split('-').map(Number);
           
-          const endDate = new Date(selectedDate);
-          endDate.setHours(23, 59, 59, 999);
+          // Crear fecha de inicio del día en zona horaria local
+          const startDate = new Date(year, month - 1, day, 0, 0, 0, 0);
+          // Crear fecha de fin del día en zona horaria local
+          const endDate = new Date(year, month - 1, day, 23, 59, 59, 999);
+          
+          // Convertir a UTC para la consulta
+          fechaDesde = startDate.toISOString();
           fechaHasta = endDate.toISOString();
+          
+          console.log('📅 [Movimientos] Filtro de fecha:', {
+            fecha_seleccionada: selectedDate,
+            fecha_desde_local: startDate.toLocaleString('es-CR', { timeZone: 'America/Costa_Rica' }),
+            fecha_hasta_local: endDate.toLocaleString('es-CR', { timeZone: 'America/Costa_Rica' }),
+            fecha_desde_utc: fechaDesde,
+            fecha_hasta_utc: fechaHasta,
+          });
         }
 
         console.log('📋 [Movimientos] Cargando datos de inventario_control:', {
@@ -91,7 +114,64 @@ export function InventoryMovements({ productos, limit = 20 }: InventoryMovements
           console.warn('⚠️ [Movimientos] No se obtuvieron registros de inventario_control');
         }
 
-        setMovimientosDB(movimientos);
+        // Filtrar adicionalmente en el cliente para asegurar que solo se muestren registros del día seleccionado
+        let movimientosFiltrados = movimientos;
+        if (selectedDate && movimientos.length > 0) {
+          const [year, month, day] = selectedDate.split('-').map(Number);
+          movimientosFiltrados = movimientos.filter((mov) => {
+            // Buscar el campo de fecha en el movimiento
+            const camposFecha = ['fecha', 'created_at', 'timestamp', 'fecha_movimiento', 'fecha_creacion', 'fecha_registro'];
+            let fechaMovimiento: string | null = null;
+            
+            for (const campo of camposFecha) {
+              if (mov[campo]) {
+                fechaMovimiento = mov[campo];
+                break;
+              }
+            }
+            
+            if (!fechaMovimiento) return false;
+            
+            try {
+              const fecha = new Date(fechaMovimiento);
+              if (isNaN(fecha.getTime())) return false;
+              
+              // Convertir a zona horaria de Costa Rica para comparar
+              const fechaCR = convertToCostaRicaTime(fecha);
+              if (!fechaCR) return false;
+              
+              // Comparar solo el año, mes y día (ignorar la hora)
+              const fechaCRYear = fechaCR.getFullYear();
+              const fechaCRMonth = fechaCR.getMonth() + 1; // getMonth() es 0-indexed
+              const fechaCRDay = fechaCR.getDate();
+              
+              const coincide = fechaCRYear === year && fechaCRMonth === month && fechaCRDay === day;
+              
+              if (!coincide) {
+                console.log('🔍 [Movimientos] Registro filtrado fuera:', {
+                  fecha_original: fechaMovimiento,
+                  fecha_cr: fechaCR.toISOString(),
+                  fecha_cr_formato: `${fechaCRDay}/${fechaCRMonth}/${fechaCRYear}`,
+                  fecha_seleccionada: `${day}/${month}/${year}`,
+                  producto: mov.producto,
+                });
+              }
+              
+              return coincide;
+            } catch (e) {
+              console.error('❌ [Movimientos] Error al procesar fecha del movimiento:', e, mov);
+              return false;
+            }
+          });
+          
+          console.log('📋 [Movimientos] Filtrado en cliente:', {
+            total_recibidos: movimientos.length,
+            total_filtrados: movimientosFiltrados.length,
+            fecha_seleccionada: selectedDate,
+          });
+        }
+        
+        setMovimientosDB(movimientosFiltrados);
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
         console.error('❌ [Movimientos] Error al cargar movimientos desde inventario_control:', error);
@@ -105,11 +185,27 @@ export function InventoryMovements({ productos, limit = 20 }: InventoryMovements
     loadMovimientos();
   }, [selectedDate, reloadTrigger]);
 
+  // Función para convertir fecha UTC a zona horaria de Costa Rica
+  const convertToCostaRicaTime = (dateString: string | Date) => {
+    try {
+      const date = typeof dateString === 'string' ? new Date(dateString) : dateString;
+      if (isNaN(date.getTime())) return null;
+      
+      // Convertir a zona horaria de Costa Rica (UTC-6)
+      // Usar toLocaleString con timeZone para obtener la fecha/hora correcta
+      const crDateString = date.toLocaleString('en-US', { timeZone: 'America/Costa_Rica' });
+      return new Date(crDateString);
+    } catch (e) {
+      return null;
+    }
+  };
+
   // Función para formatear fechas en formato de Costa Rica de forma amigable
   const formatDateCR = (dateString: string | Date) => {
     try {
-      const date = typeof dateString === 'string' ? new Date(dateString) : dateString;
-      if (isNaN(date.getTime())) return { fecha: '-', hora: '', relativo: '' };
+      // Convertir primero a zona horaria de Costa Rica
+      const crDate = convertToCostaRicaTime(dateString);
+      if (!crDate) return { fecha: '-', hora: '' };
       
       const meses = [
         'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
@@ -118,31 +214,13 @@ export function InventoryMovements({ productos, limit = 20 }: InventoryMovements
       
       const diasSemana = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
       
-      const dia = date.getDate();
-      const mes = meses[date.getMonth()];
-      const anio = date.getFullYear();
-      const diaSemana = diasSemana[date.getDay()];
-      const horas = date.getHours().toString().padStart(2, '0');
-      const minutos = date.getMinutes().toString().padStart(2, '0');
-      const segundos = date.getSeconds().toString().padStart(2, '0');
-      
-      const ahora = new Date();
-      const diferenciaMs = ahora.getTime() - date.getTime();
-      const diferenciaSegundos = Math.floor(diferenciaMs / 1000);
-      const diferenciaMinutos = Math.floor(diferenciaSegundos / 60);
-      const diferenciaHoras = Math.floor(diferenciaMinutos / 60);
-      const diferenciaDias = Math.floor(diferenciaHoras / 24);
-      
-      let tiempoRelativo = '';
-      if (diferenciaSegundos < 60) {
-        tiempoRelativo = 'hace un momento';
-      } else if (diferenciaMinutos < 60) {
-        tiempoRelativo = diferenciaMinutos === 1 ? 'hace 1 min' : `hace ${diferenciaMinutos} min`;
-      } else if (diferenciaHoras < 24) {
-        tiempoRelativo = diferenciaHoras === 1 ? 'hace 1 hora' : `hace ${diferenciaHoras} hrs`;
-      } else if (diferenciaDias < 7) {
-        tiempoRelativo = diferenciaDias === 1 ? 'hace 1 día' : `hace ${diferenciaDias} días`;
-      }
+      const dia = crDate.getDate();
+      const mes = meses[crDate.getMonth()];
+      const anio = crDate.getFullYear();
+      const diaSemana = diasSemana[crDate.getDay()];
+      const horas = crDate.getHours().toString().padStart(2, '0');
+      const minutos = crDate.getMinutes().toString().padStart(2, '0');
+      const segundos = crDate.getSeconds().toString().padStart(2, '0');
       
       // Formato: "Lun, 23 de noviembre de 2025"
       const fechaCompleta = `${diaSemana}, ${dia} de ${mes} de ${anio}`;
@@ -151,10 +229,10 @@ export function InventoryMovements({ productos, limit = 20 }: InventoryMovements
       return {
         fecha: fechaCompleta,
         hora: horaCompleta,
-        relativo: tiempoRelativo
+        dateObj: crDate // También devolver el objeto Date para uso en filtros
       };
     } catch (e) {
-      return { fecha: '-', hora: '', relativo: '' };
+      return { fecha: '-', hora: '', dateObj: null };
     }
   };
 
@@ -549,38 +627,6 @@ export function InventoryMovements({ productos, limit = 20 }: InventoryMovements
     );
   }
 
-  // Solo mostrar mensaje de "sin datos" si realmente no hay datos de la BD
-  if (movimientosDB.length === 0 && !loadingMovimientosDB) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Database className="h-5 w-5" />
-            Movimientos de Inventario
-          </CardTitle>
-          <p className="text-sm text-muted-foreground mt-1">
-            Datos desde la tabla <code className="text-xs bg-slate-100 px-1.5 py-0.5 rounded">inventario_control</code>
-          </p>
-        </CardHeader>
-        <CardContent>
-          <div className="text-center py-8 text-muted-foreground">
-            <Database className="h-12 w-12 mx-auto mb-4 opacity-50" />
-            <p className="font-medium mb-1">No hay datos disponibles</p>
-            <p className="text-sm mb-4">
-              {selectedDate 
-                ? `No se encontraron registros para la fecha seleccionada en la tabla inventario_control`
-                : 'No hay registros en la tabla inventario_control'}
-            </p>
-            <div className="text-xs text-muted-foreground space-y-1">
-              <p>Debug: movimientosDB.length = {movimientosDB.length}</p>
-              <p>Debug: loadingMovimientosDB = {String(loadingMovimientosDB)}</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
   const today = new Date().toISOString().split('T')[0];
 
   return (
@@ -636,20 +682,22 @@ export function InventoryMovements({ productos, limit = 20 }: InventoryMovements
               type="date"
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
-              className="h-9 w-auto"
+              className="h-9 w-auto min-w-[160px]"
               max={today}
+              placeholder="dd/mm/aaaa"
             />
+            {selectedDate && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setSelectedDate('')}
+                className="h-9 px-2"
+                title="Limpiar filtro"
+              >
+                <XCircle className="h-4 w-4" />
+              </Button>
+            )}
           </div>
-          {selectedDate && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setSelectedDate('')}
-              className="h-9"
-            >
-              Limpiar filtro
-            </Button>
-          )}
         </div>
       </CardHeader>
       {error && (
@@ -714,7 +762,7 @@ export function InventoryMovements({ productos, limit = 20 }: InventoryMovements
                                   {fechaInfo.fecha}
                                 </span>
                                 <span className="text-xs text-muted-foreground">
-                                  {fechaInfo.hora} {fechaInfo.relativo && `• ${fechaInfo.relativo}`}
+                                  {fechaInfo.hora}
                                 </span>
                               </div>
                             );
@@ -725,12 +773,10 @@ export function InventoryMovements({ productos, limit = 20 }: InventoryMovements
                           displayValue = <span>{value}</span>;
                         }
                       } else if (typeof value === 'number' && key.toLowerCase().includes('cantidad')) {
-                        // Resaltar cantidades
+                        // Mostrar solo el número sin signos ni colores
                         displayValue = (
-                          <span className={`font-semibold ${
-                            value > 0 ? 'text-green-600' : value < 0 ? 'text-red-600' : 'text-slate-900'
-                          }`}>
-                            {value > 0 ? '+' : ''}{value}
+                          <span className="font-semibold text-black">
+                            {value}
                           </span>
                         );
                       } else if (typeof value === 'number') {
@@ -759,20 +805,11 @@ export function InventoryMovements({ productos, limit = 20 }: InventoryMovements
           <div className="text-center py-8 text-muted-foreground">
             <Database className="h-12 w-12 mx-auto mb-4 opacity-50" />
             <p className="font-medium mb-1">No hay datos disponibles</p>
-            <p className="text-sm mb-4">
+            <p className="text-sm">
               {selectedDate 
-                ? `No se encontraron registros para la fecha seleccionada`
+                ? `No se encontraron registros para la fecha seleccionada en la tabla inventario_control` 
                 : 'No hay registros en la tabla inventario_control'}
             </p>
-            <div className="text-xs text-muted-foreground space-y-1 bg-slate-50 p-3 rounded">
-              <p><strong>Estado de carga:</strong></p>
-              <p>• movimientosDB.length = {movimientosDB.length}</p>
-              <p>• loadingMovimientosDB = {String(loadingMovimientosDB)}</p>
-              <p>• Filtro de fecha = {selectedDate || 'ninguno'}</p>
-              <p className="mt-2 text-orange-600">
-                💡 Revisa la consola del navegador para ver más detalles de la carga de datos
-              </p>
-            </div>
           </div>
         )}
       </CardContent>

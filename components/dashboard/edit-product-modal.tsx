@@ -26,7 +26,7 @@ interface EditProductModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   product: ProductoInventario;
-  onSave: (product: Omit<ProductoInventario, 'idx'>) => void;
+  onSave: (product: Omit<ProductoInventario, 'idx'> & { stock_minimo?: number; stock_maximo?: number }) => void;
   stores?: string[];
   hideStoreField?: boolean;
   defaultStore?: string;
@@ -45,6 +45,8 @@ export function EditProductModal({
     producto: '',
     cantidad: 0,
     tienda: stores[0] || '',
+    stock_minimo: 5,
+    stock_maximo: 20,
   });
 
   useEffect(() => {
@@ -57,6 +59,8 @@ export function EditProductModal({
         producto: product.producto || '',
         cantidad: product.cantidad || 0,
         tienda: defaultTienda,
+        stock_minimo: 5,
+        stock_maximo: 20,
       });
     }
   }, [product, stores, hideStoreField, defaultStore, open]);
@@ -66,7 +70,11 @@ export function EditProductModal({
     if (!formData.producto.trim()) {
       return;
     }
-    onSave(formData);
+    onSave({
+      ...formData,
+      stock_minimo: formData.stock_minimo,
+      stock_maximo: formData.stock_maximo,
+    });
     onOpenChange(false);
   };
 
@@ -105,6 +113,9 @@ export function EditProductModal({
           </div>
 
           <div className="space-y-2">
+            <Label htmlFor="cantidad" className="text-sm font-semibold">
+              Cantidad en Stock
+            </Label>
             <Input
               id="cantidad"
               type="number"
@@ -114,8 +125,41 @@ export function EditProductModal({
                 setFormData({ ...formData, cantidad: parseInt(e.target.value, 10) || 0 })
               }
               placeholder="0"
-              className="h-9 bg-red-50 border-red-200 text-red-400 cursor-not-allowed"
-              disabled
+              className="h-9"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="stock_minimo" className="text-sm font-semibold">
+              Stock Mínimo
+            </Label>
+            <Input
+              id="stock_minimo"
+              type="number"
+              min="0"
+              value={formData.stock_minimo}
+              onChange={(e) =>
+                setFormData({ ...formData, stock_minimo: parseInt(e.target.value, 10) || 0 })
+              }
+              placeholder="5"
+              className="h-9"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="stock_maximo" className="text-sm font-semibold">
+              Stock Máximo
+            </Label>
+            <Input
+              id="stock_maximo"
+              type="number"
+              min="1"
+              value={formData.stock_maximo}
+              onChange={(e) =>
+                setFormData({ ...formData, stock_maximo: parseInt(e.target.value, 10) || 20 })
+              }
+              placeholder="20"
+              className="h-9"
             />
           </div>
 
