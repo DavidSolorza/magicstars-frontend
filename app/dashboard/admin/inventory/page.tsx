@@ -222,8 +222,7 @@ export default function AdminInventoryPage() {
       setLoading(true);
       setError(null);
       
-      // Determinar si es nuevo o editar basado en editingProduct (igual que en asesor)
-      // Si editingProduct existe, es editar; si no, es nuevo
+      // Determinar si es nuevo o editar basado en editingProduct
       const isEditing = editingProduct !== null;
       const tipoOperacion = isEditing ? 'editar' : 'nuevo';
       
@@ -231,12 +230,12 @@ export default function AdminInventoryPage() {
       const productKey = getProductKey(productData.tienda, productData.producto);
       const alertConfig = alertConfigs[productKey];
       
-      // Preparar payload para el endpoint
-      // Usar los valores del formulario si están disponibles, sino usar los de localStorage, sino valores por defecto
+      // Preparar payload exactamente como lo requiere el webhook
+      // Formato: producto, cantidad, tienda, stock_minimo, stock_maximo, tipo_operacion, usuario
       const payload = {
-        producto: productData.producto,
+        producto: productData.producto.trim(),
         cantidad: productData.cantidad || 0,
-        tienda: productData.tienda,
+        tienda: productData.tienda.trim(),
         stock_minimo: productData.stock_minimo ?? alertConfig?.stockMinimo ?? DEFAULT_MINIMUM_STOCK,
         stock_maximo: productData.stock_maximo ?? alertConfig?.stockMaximo ?? DEFAULT_MAXIMUM_STOCK,
         tipo_operacion: tipoOperacion,

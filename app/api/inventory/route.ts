@@ -183,7 +183,8 @@ export async function POST(request: NextRequest) {
       
       console.log('📤 [API] Payload para ELIMINAR:', JSON.stringify(payload, null, 2));
     } else {
-      // Para nuevo/editar: todos los campos
+      // Para nuevo/editar: todos los campos exactamente como lo requiere el webhook
+      // Formato: producto, cantidad, tienda, stock_minimo, stock_maximo, tipo_operacion, usuario
       payload = {
         producto: String(body.producto).trim(),
         cantidad: Number(body.cantidad),
