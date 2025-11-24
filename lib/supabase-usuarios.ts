@@ -141,6 +141,7 @@ export type UsuarioRow = {
 const normalizeRole = (role: string): UserRole => {
   const value = role?.toLowerCase().trim();
   if (value === 'admin') return 'admin';
+  if (value === 'master') return 'master';
   if (value === 'asesor') return 'asesor';
   if (value === 'mensajero') return 'mensajero';
   if (value === 'mensajero-lider' || value === 'mensajero líder' || value === 'mensajero-líder') return 'mensajero-lider';
@@ -317,7 +318,28 @@ const buildPayload = (input: UsuarioInput, columns: ColumnGuess) => {
 export const createUsuario = async (input: UsuarioInput): Promise<UsuarioRow> => {
   const supabase = getSupabaseUsuarios();
   const columns = await detectColumnMap();
+  
+  // Verificar si el email ya existe antes de insertar
+  const { data: existingUser, error: checkError } = await supabase
+    .from('usuarios')
+    .select('*')
+    .eq(columns.email ?? 'Email', input.email)
+    .maybeSingle();
+
+  if (checkError && checkError.code !== 'PGRST116') {
+    console.error('❌ Error al verificar usuario existente:', checkError);
+  }
+
+  if (existingUser) {
+    throw new Error(`Ya existe un usuario con el email ${input.email}. Por favor, usa un email diferente.`);
+  }
+
   const payload = buildPayload(input, columns);
+  
+  // Asegurarse de que no estamos incluyendo el ID en el payload si existe
+  if (columns.id && payload[columns.id]) {
+    delete payload[columns.id];
+  }
 
   const { data, error } = await supabase
     .from('usuarios')
@@ -327,6 +349,32 @@ export const createUsuario = async (input: UsuarioInput): Promise<UsuarioRow> =>
 
   if (error) {
     console.error('❌ Error al crear usuario en Supabase:', error);
+    console.error('📋 Payload enviado:', payload);
+    console.error('📋 Columnas detectadas:', columns);
+    
+    // Manejar errores de clave duplicada de forma más amigable
+    if (error.code === '23505') {
+      // Si el error es por la primary key, probablemente el email ya existe
+      if (error.message.includes('usuarios_pkey')) {
+        // Intentar verificar nuevamente el email
+        const { data: recheckUser } = await supabase
+          .from('usuarios')
+          .select(columns.email ?? 'Email')
+          .eq(columns.email ?? 'Email', input.email)
+          .maybeSingle();
+        
+        if (recheckUser) {
+          throw new Error(`Ya existe un usuario con el email ${input.email}. Por favor, genera un email diferente.`);
+        } else {
+          throw new Error('Ya existe un usuario con este identificador. Por favor, intenta con un nombre diferente para generar un email único.');
+        }
+      } else if (error.message.includes('email') || error.message.includes('Email')) {
+        throw new Error(`Ya existe un usuario con el email ${input.email}`);
+      } else {
+        throw new Error('Ya existe un usuario con estos datos. Por favor, verifica la información.');
+      }
+    }
+    
     throw new Error(error.message);
   }
 

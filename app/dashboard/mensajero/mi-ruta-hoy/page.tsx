@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import dynamic from 'next/dynamic';
 import { useAuth } from '@/contexts/auth-context';
 import { mockApi } from '@/lib/mock-api';
 import { Order, PedidoTest, OrderStatus } from '@/lib/types';
@@ -19,7 +20,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -38,6 +38,15 @@ import {
   LineChart,
   Line
 } from 'recharts';
+
+// Lazy load Calendar
+const CalendarComponent = dynamic(
+  () => import('@/components/ui/calendar').then(mod => ({ default: mod.Calendar })),
+  { 
+    ssr: false, 
+    loading: () => <div className="h-[300px] flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin" /></div> 
+  }
+);
 import { 
   Package, 
   CheckCircle, 

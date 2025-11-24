@@ -80,7 +80,7 @@ export default function LoginPage() {
       await new Promise(resolve => setTimeout(resolve, 100));
       
       // Redirigir según el rol del usuario
-      if (user?.role === 'admin') {
+      if (user?.role === 'admin' || user?.role === 'master') {
         console.log('🔄 Redirigiendo a admin dashboard');
         router.push('/dashboard/admin');
       } else if (user?.role === 'asesor') {
@@ -92,6 +92,12 @@ export default function LoginPage() {
       } else if (user?.role === 'mensajero-lider') {
         console.log('🔄 Redirigiendo a gestión de rutas');
         router.push('/dashboard/mensajero-lider');
+      } else if (user?.role === 'mensajero-extra') {
+        console.log('🔄 Redirigiendo a mi ruta de hoy');
+        router.push('/dashboard/mensajero/mi-ruta-hoy');
+      } else if (user?.role === 'tienda') {
+        console.log('🔄 Redirigiendo a tienda dashboard');
+        router.push('/dashboard/tienda');
       } else {
         console.log('🔄 Redirigiendo a página principal');
         router.push('/');
@@ -105,96 +111,125 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-sky-50 via-indigo-50 to-purple-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 p-4">
       <div className="w-full max-w-md space-y-6">
-        {/* Logo and Title */}
-        <div className="text-center">
-          <div className="w-16 h-16 bg-gradient-to-br from-blue-600 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
-            <Star className="w-8 h-8 text-white" />
+        {/* Logo and Title - Mejorado */}
+        <div className="text-center space-y-4">
+          <div className="relative inline-block">
+            <div className="absolute -inset-1 bg-gradient-to-r from-sky-400 via-indigo-400 to-purple-400 rounded-2xl blur opacity-20 animate-pulse"></div>
+            <div className="relative w-20 h-20 bg-gradient-to-br from-sky-500 via-indigo-500 to-purple-500 rounded-2xl flex items-center justify-center shadow-xl">
+              <Star className="w-10 h-10 text-white" />
+            </div>
           </div>
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-            Sistema de Delivery
-          </h1>
-          <p className="text-muted-foreground mt-2">
-            Gestión Multi-Empresa de Pedidos
-          </p>
+          <div className="space-y-2">
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-sky-600 via-indigo-600 to-purple-600 bg-clip-text text-transparent">
+              Sistema de Delivery
+            </h1>
+            <p className="text-muted-foreground text-sm">
+              Gestión Multi-Empresa de Pedidos
+            </p>
+          </div>
         </div>
 
-        {/* Login Form */}
-        <Card className="shadow-lg border-0 bg-white/80 backdrop-blur">
-          <CardHeader>
-            <CardTitle>Iniciar Sesión</CardTitle>
-            <CardDescription>
-              Ingresa tus credenciales para acceder al sistema
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="emailOrName">Email o Nombre</Label>
-                <Input
-                  id="emailOrName"
-                  type="text"
-                  placeholder="alex@magicstars.com o Alex"
-                  value={emailOrName}
-                  onChange={(e) => setEmailOrName(e.target.value)}
-                  required
-                  disabled={loading}
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="password">Contraseña</Label>
-                <div className="relative">
-                  <Input
-                    id="password"
-                    type={showPassword ? 'text' : 'password'}
-                    placeholder="Alex1234"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    disabled={loading}
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
-                    onClick={() => setShowPassword(!showPassword)}
-                  >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </Button>
+        {/* Login Form - Mejorado */}
+        <div className="relative group">
+          <div className="absolute -inset-0.5 bg-gradient-to-r from-sky-400 via-indigo-400 to-purple-400 rounded-2xl opacity-20 group-hover:opacity-30 blur transition duration-300"></div>
+          <Card className="relative border-0 shadow-2xl bg-gradient-to-br from-white/95 to-slate-50/95 dark:from-slate-900/95 dark:to-slate-800/95 backdrop-blur-sm">
+            <CardHeader className="pb-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-sky-500 to-indigo-500 text-white shadow-md">
+                  <Star className="w-5 h-5" />
+                </div>
+                <div>
+                  <CardTitle className="text-xl">Iniciar Sesión</CardTitle>
+                  <CardDescription className="mt-1">
+                    Ingresa tus credenciales para acceder al sistema
+                  </CardDescription>
                 </div>
               </div>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleSubmit} className="space-y-5">
+                <div className="space-y-2">
+                  <Label htmlFor="emailOrName" className="text-sm font-medium flex items-center gap-2">
+                    <span>Email o Nombre</span>
+                  </Label>
+                  <Input
+                    id="emailOrName"
+                    type="text"
+                    placeholder="alex@magicstars.com o Alex"
+                    value={emailOrName}
+                    onChange={(e) => setEmailOrName(e.target.value)}
+                    required
+                    disabled={loading}
+                    className="h-11 transition-all duration-200 focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="password" className="text-sm font-medium flex items-center gap-2">
+                    <span>Contraseña</span>
+                  </Label>
+                  <div className="relative">
+                    <Input
+                      id="password"
+                      type={showPassword ? 'text' : 'password'}
+                      placeholder="Alex1234"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                      disabled={loading}
+                      className="h-11 pr-10 transition-all duration-200 focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-0 top-0 h-full px-3 hover:bg-transparent text-muted-foreground hover:text-foreground transition-colors"
+                      onClick={() => setShowPassword(!showPassword)}
+                      disabled={loading}
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </Button>
+                  </div>
+                </div>
 
-              {error && (
-                <Alert variant="destructive">
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
-              )}
-
-              <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Iniciando sesión...
-                  </>
-                ) : (
-                  'Iniciar Sesión'
+                {error && (
+                  <Alert variant="destructive" className="animate-in slide-in-from-top-2 duration-300">
+                    <AlertDescription className="font-medium">{error}</AlertDescription>
+                  </Alert>
                 )}
-              </Button>
-            </form>
 
-            <div className="mt-6 text-center">
-              <Link 
-                href="/auth/forgot-password" 
-                className="text-sm text-primary hover:underline"
-              >
-                ¿Olvidaste tu contraseña?
-              </Link>
-            </div>
-          </CardContent>
-        </Card>
+                <Button 
+                  type="submit" 
+                  className="w-full h-11 bg-gradient-to-r from-sky-500 via-indigo-500 to-purple-500 hover:from-sky-600 hover:via-indigo-600 hover:to-purple-600 text-white shadow-lg transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]" 
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <>
+                      <div className="relative w-4 h-4 mr-2">
+                        <div className="absolute inset-0 rounded-full border-2 border-white/30"></div>
+                        <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-white border-r-white animate-spin"></div>
+                      </div>
+                      Iniciando sesión...
+                    </>
+                  ) : (
+                    'Iniciar Sesión'
+                  )}
+                </Button>
+              </form>
+
+              <div className="mt-6 text-center">
+                <Link 
+                  href="/auth/forgot-password" 
+                  className="text-sm text-sky-600 dark:text-sky-400 hover:text-sky-700 dark:hover:text-sky-300 hover:underline transition-colors"
+                >
+                  ¿Olvidaste tu contraseña?
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
 
         {/* Demo Users - DESACTIVADO */}
         {/* 

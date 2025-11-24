@@ -3,7 +3,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { ProductoInventario } from '@/lib/supabase-inventario';
 import { Order } from '@/lib/types';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -40,6 +41,7 @@ import {
 } from 'lucide-react';
 import { ProductFormModal } from '@/components/dashboard/product-form-modal';
 import { Input } from '@/components/ui/input';
+import { API_URLS } from '@/lib/config';
 
 interface UnmappedProduct {
   id: string;
@@ -348,7 +350,7 @@ export function UnmappedProductsManager({
     setShowMappingDialog(true);
   };
 
-  const handleSaveMapping = () => {
+  const handleSaveMapping = async () => {
     if (!selectedUnmapped || !selectedMappedProduct) return;
 
     const normalized = normalizeProductName(selectedUnmapped.name);
@@ -378,6 +380,52 @@ export function UnmappedProductsManager({
         ...prev,
         [normalized]: comboMappingName,
       }));
+
+      // Enviar al endpoint de diccionario de combos
+      try {
+        const comboNuevo: string[] = [];
+        for (let i = 0; i < mappingQuantity; i++) {
+          comboNuevo.push(selectedMappedProduct);
+        }
+        
+        const payload = {
+          combo_existente: selectedUnmapped.name, // Producto no encontrado
+          combo_nuevo: comboNuevo, // Array con el producto repetido según cantidad
+        };
+
+        console.log('📤 Enviando combo simple al diccionario:', {
+          endpoint: API_URLS.ADD_DICCIONARIO_COMBOS,
+          payload,
+          detalle: {
+            producto_no_encontrado: selectedUnmapped.name,
+            producto_inventario: selectedMappedProduct,
+            cantidad: mappingQuantity,
+            productos_array: comboNuevo,
+          },
+        });
+        
+        const response = await fetch(API_URLS.ADD_DICCIONARIO_COMBOS, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('❌ Error al enviar combo al diccionario:', {
+            status: response.status,
+            statusText: response.statusText,
+            error: errorText,
+          });
+        } else {
+          const responseData = await response.json().catch(() => ({}));
+          console.log('✅ Combo enviado al diccionario exitosamente:', responseData);
+        }
+      } catch (error) {
+        console.error('❌ Error al enviar combo al diccionario:', error);
+      }
     } else {
       // Mapeo simple sin cantidad
       saveMapping(selectedUnmapped.name, selectedMappedProduct, false, undefined, 1);
@@ -461,7 +509,7 @@ export function UnmappedProductsManager({
     setComboItems(comboItems.filter((_, i) => i !== index));
   };
 
-  const handleSaveCombo = () => {
+  const handleSaveCombo = async () => {
     // Validaciones mejoradas
     if (!comboName.trim()) {
       return;
@@ -502,6 +550,53 @@ export function UnmappedProductsManager({
       ...prev,
       [normalized]: comboMappingName,
     }));
+
+    // Enviar al endpoint de diccionario de combos
+    try {
+      const comboNuevo: string[] = [];
+      comboItems.forEach(item => {
+        for (let i = 0; i < item.quantity; i++) {
+          comboNuevo.push(item.productName.trim());
+        }
+      });
+      
+      const payload = {
+        combo_existente: selectedUnmapped.name, // Producto no encontrado (ej: "1 X URO Y ACEITE TRULY")
+        combo_nuevo: comboNuevo, // Array de productos del inventario (ej: ["ACEITE TRULY MORADO GLASSED DONUT"])
+      };
+
+      console.log('📤 Enviando combo al diccionario:', {
+        endpoint: API_URLS.ADD_DICCIONARIO_COMBOS,
+        payload,
+        detalle: {
+          producto_no_encontrado: selectedUnmapped.name,
+          productos_inventario: comboNuevo,
+          cantidad_productos: comboNuevo.length,
+        },
+      });
+      
+      const response = await fetch(API_URLS.ADD_DICCIONARIO_COMBOS, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ Error al enviar combo al diccionario:', {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorText,
+        });
+      } else {
+        const responseData = await response.json().catch(() => ({}));
+        console.log('✅ Combo enviado al diccionario exitosamente:', responseData);
+      }
+    } catch (error) {
+      console.error('❌ Error al enviar combo al diccionario:', error);
+    }
 
     // Remover de la lista de no mapeados
     setUnmappedProducts(prev =>
@@ -663,61 +758,80 @@ export function UnmappedProductsManager({
 
   if (unmappedProducts.length === 0) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <CheckCircle2 className="h-5 w-5 text-green-600" />
-            Productos No Encontrados
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="text-center py-8 text-muted-foreground">
-            <Package className="h-12 w-12 mx-auto mb-4 opacity-50" />
-            <p className="font-medium">¡Excelente!</p>
-            <p className="text-sm">Todos los productos están correctamente definidos en el inventario.</p>
+      <>
+        {/* Header mejorado con gradiente */}
+        <div className="relative rounded-2xl bg-gradient-to-r from-emerald-500 via-green-500 to-teal-500 p-8 text-white overflow-hidden mb-6">
+          <div className="absolute inset-0 opacity-20"></div>
+          <div className="relative flex items-center gap-4">
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/20 backdrop-blur-sm shadow-lg">
+              <CheckCircle2 className="h-8 w-8 text-white" />
+            </div>
+            <div>
+              <p className="inline-flex items-center gap-2 rounded-full bg-white/20 backdrop-blur-sm px-4 py-1.5 text-sm font-medium text-white mb-3">
+                <Package className="h-4 w-4" />
+                Estado del inventario
+              </p>
+              <h1 className="text-4xl font-bold tracking-tight text-white mb-2">
+                Productos No Encontrados
+              </h1>
+              <p className="text-white/90 text-base">
+                ¡Excelente! Todos los productos están correctamente definidos en el inventario.
+              </p>
+            </div>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </>
     );
   }
 
   return (
     <>
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div className="flex-1">
-              <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center gap-2">
-                  <AlertTriangle className="h-5 w-5 text-amber-600" />
-                  Productos No Encontrados
-                </CardTitle>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setIsCollapsed(!isCollapsed)}
-                  className="h-8 w-8 p-0"
-                >
-                  {isCollapsed ? (
-                    <ChevronDown className="h-4 w-4" />
-                  ) : (
-                    <ChevronUp className="h-4 w-4" />
-                  )}
-                </Button>
-              </div>
-              <p className="text-sm text-muted-foreground mt-1">
+      {/* Header mejorado con gradiente */}
+      <div className="relative rounded-2xl bg-gradient-to-r from-amber-500 via-orange-500 to-yellow-500 p-8 text-white overflow-hidden mb-6">
+        <div className="absolute inset-0 opacity-20"></div>
+        <div className="relative flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+          <div className="flex items-center gap-4">
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/20 backdrop-blur-sm shadow-lg">
+              <AlertTriangle className="h-8 w-8 text-white" />
+            </div>
+            <div>
+              <p className="inline-flex items-center gap-2 rounded-full bg-white/20 backdrop-blur-sm px-4 py-1.5 text-sm font-medium text-white mb-3">
+                <Package className="h-4 w-4" />
+                Gestión de productos no mapeados
+              </p>
+              <h1 className="text-4xl font-bold tracking-tight text-white mb-2">
+                Productos No Encontrados
+              </h1>
+              <p className="text-white/90 text-base">
                 {unmappedSearchTerm 
                   ? `${filteredUnmappedProducts.length} de ${unmappedProducts.length} productos`
                   : `${unmappedProducts.length} producto${unmappedProducts.length !== 1 ? 's' : ''} requieren mapeo`}
               </p>
             </div>
-            <Badge variant="destructive" className="text-sm ml-4">
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <Badge variant="secondary" className="text-sm px-4 py-2 bg-white/20 backdrop-blur-sm text-white border-white/30">
               {unmappedSearchTerm ? filteredUnmappedProducts.length : unmappedProducts.length}
             </Badge>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsCollapsed(!isCollapsed)}
+              className="h-10 w-10 p-0 bg-white/10 backdrop-blur-sm border-white/20 text-white hover:bg-white/20"
+            >
+              {isCollapsed ? (
+                <ChevronDown className="h-5 w-5" />
+              ) : (
+                <ChevronUp className="h-5 w-5" />
+              )}
+            </Button>
           </div>
-        </CardHeader>
-        {!isCollapsed && (
-          <CardContent>
+        </div>
+      </div>
+
+      {!isCollapsed && (
+      <Card>
+        <CardContent>
             <Alert className="mb-4 border-amber-200 bg-amber-50">
               <AlertTriangle className="h-4 w-4 text-amber-600" />
               <AlertDescription className="text-amber-900">
@@ -735,7 +849,7 @@ export function UnmappedProductsManager({
                   placeholder="Buscar productos no encontrados..."
                   value={unmappedSearchTerm}
                   onChange={(e) => setUnmappedSearchTerm(e.target.value)}
-                  className="h-10 pl-9 pr-9"
+                  className="h-10 pl-9 pr-9 rounded-full"
                 />
                 {unmappedSearchTerm && (
                   <Button
@@ -749,99 +863,130 @@ export function UnmappedProductsManager({
                   </Button>
                 )}
               </div>
-              {unmappedSearchTerm && (
-                <p className="mt-2 text-xs text-muted-foreground">
-                  Mostrando {filteredUnmappedProducts.length} de {unmappedProducts.length} productos
-                </p>
-              )}
             </div>
 
-            <div className="space-y-3">
-              {paginatedProducts.map((product) => (
-                <div
-                  key={product.id}
-                  className="flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50/50 p-4 transition-colors hover:bg-amber-50"
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Package className="h-4 w-4 text-amber-600 shrink-0" />
-                      <p className="font-semibold text-sm text-foreground truncate">
-                        {product.name}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-3 text-xs text-muted-foreground ml-6">
-                      <span className="flex items-center gap-1">
-                        <span className="font-medium">{product.occurrences}</span>
-                        {product.occurrences === 1 ? 'aparición' : 'apariciones'}
-                      </span>
-                      <span>•</span>
-                      <span>
-                        {product.orderIds.length} pedido{product.orderIds.length !== 1 ? 's' : ''}
-                      </span>
-                      <span>•</span>
-                      <span>
-                        Último: {new Date(product.lastSeen).toLocaleDateString('es-CR')}
-                      </span>
-                    </div>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleOpenMapping(product)}
-                    className="ml-4 shrink-0"
-                  >
-                    <ArrowRight className="mr-2 h-4 w-4" />
-                    Asignar
-                  </Button>
+            {paginatedProducts.length === 0 ? (
+              <div className="text-center py-12">
+                <div className="p-3 bg-gray-100 rounded-full w-16 h-16 mx-auto mb-3 flex items-center justify-center">
+                  <Package className="w-8 h-8 text-gray-400" />
                 </div>
-              ))}
-            </div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-1">No hay productos para mostrar</h3>
+                <p className="text-sm text-gray-500">
+                  {unmappedSearchTerm 
+                    ? 'No se encontraron productos que coincidan con la búsqueda'
+                    : 'Todos los productos están mapeados correctamente'}
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {paginatedProducts.map((product) => (
+                  <div
+                    key={product.id}
+                    className="flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50/50 p-3 transition-colors hover:bg-amber-50 hover:shadow-sm"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Package className="h-4 w-4 text-amber-600 shrink-0" />
+                        <p className="font-semibold text-sm text-foreground truncate">
+                          {product.name}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-3 text-xs text-muted-foreground ml-6">
+                        <span className="flex items-center gap-1">
+                          <span className="font-medium">{product.occurrences}</span>
+                          {product.occurrences === 1 ? 'aparición' : 'apariciones'}
+                        </span>
+                        <span>•</span>
+                        <span>
+                          {product.orderIds.length} pedido{product.orderIds.length !== 1 ? 's' : ''}
+                        </span>
+                        <span>•</span>
+                        <span>
+                          Último: {new Date(product.lastSeen).toLocaleDateString('es-CR')}
+                        </span>
+                      </div>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleOpenMapping(product)}
+                      className="ml-4 shrink-0 h-8"
+                    >
+                      <ArrowRight className="mr-2 h-3.5 w-3.5" />
+                      Asignar
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {/* Paginación */}
             {totalPages > 1 && (
-              <div className="mt-4 flex items-center justify-between border-t pt-4">
-                <div className="text-sm text-muted-foreground">
-                  Mostrando {((currentPage - 1) * ITEMS_PER_PAGE) + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, filteredUnmappedProducts.length)} de {filteredUnmappedProducts.length}
-                  {unmappedSearchTerm && ` (de ${unmappedProducts.length} total)`}
-                </div>
-                <div className="flex items-center gap-2">
+              <div className="flex items-center justify-center gap-2 border-t px-3 py-1.5 bg-gray-50/50">
+                <div className="flex items-center gap-1">
                   <Button
-                    variant="outline"
+                    variant="ghost"
                     size="sm"
                     onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
                     disabled={currentPage === 1}
-                    className="h-8"
+                    className="h-6 w-6 p-0 hover:bg-gray-200"
                   >
-                    <ChevronLeft className="h-4 w-4" />
+                    <ChevronLeft className="h-3 w-3" />
                   </Button>
+                  
+                  {/* Indicadores de página con puntos */}
                   <div className="flex items-center gap-1">
-                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                      <Button
-                        key={page}
-                        variant={currentPage === page ? 'default' : 'outline'}
-                        size="sm"
-                        onClick={() => setCurrentPage(page)}
-                        className="h-8 w-8 p-0"
-                      >
-                        {page}
-                      </Button>
-                    ))}
+                    {Array.from({ length: totalPages }, (_, i) => {
+                      const pageNum = i + 1;
+                      // Mostrar solo algunos puntos: primeros, últimos, y alrededor de la actual
+                      const showDot = 
+                        pageNum === 1 || 
+                        pageNum === totalPages ||
+                        (pageNum >= currentPage - 1 && pageNum <= currentPage + 1) ||
+                        (currentPage <= 3 && pageNum <= 5) ||
+                        (currentPage >= totalPages - 2 && pageNum >= totalPages - 4);
+                      
+                      if (!showDot) {
+                        // Mostrar puntos suspensivos
+                        if (pageNum === currentPage - 2 && currentPage > 4) {
+                          return <span key={pageNum} className="text-gray-400 text-[10px]">...</span>;
+                        }
+                        if (pageNum === currentPage + 2 && currentPage < totalPages - 3) {
+                          return <span key={pageNum} className="text-gray-400 text-[10px]">...</span>;
+                        }
+                        return null;
+                      }
+                      
+                      return (
+                        <button
+                          key={pageNum}
+                          onClick={() => setCurrentPage(pageNum)}
+                          className={`h-1.5 w-1.5 rounded-full transition-all ${
+                            currentPage === pageNum
+                              ? 'bg-amber-600 w-4'
+                              : 'bg-gray-300 hover:bg-gray-400'
+                          }`}
+                          aria-label={`Ir a página ${pageNum}`}
+                        />
+                      );
+                    })}
                   </div>
+                  
                   <Button
-                    variant="outline"
+                    variant="ghost"
                     size="sm"
                     onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
                     disabled={currentPage === totalPages}
-                    className="h-8"
+                    className="h-6 w-6 p-0 hover:bg-gray-200"
                   >
-                    <ChevronRight className="h-4 w-4" />
+                    <ChevronRight className="h-3 w-3" />
                   </Button>
                 </div>
               </div>
             )}
           </CardContent>
-        )}
-      </Card>
+        </Card>
+      )}
 
       {/* Dialog para mapear producto */}
       <Dialog open={showMappingDialog} onOpenChange={setShowMappingDialog}>
@@ -853,7 +998,7 @@ export function UnmappedProductsManager({
               </div>
               <div className="min-w-0 flex-1">
                 <DialogTitle className="text-lg leading-tight">
-                  Asignar Producto No Encontrado
+                  Asignar Producto No Encontrado (producto nuevo)
                 </DialogTitle>
                 <DialogDescription className="mt-0.5 text-xs">
                   {selectedUnmapped 
@@ -953,14 +1098,14 @@ export function UnmappedProductsManager({
                     </SelectContent>
                   </Select>
                   <div className="flex flex-col gap-1">
-                    <label className="text-xs text-muted-foreground">Cantidad</label>
                     <Input
                       type="number"
                       min="1"
                       value={mappingQuantity}
                       onChange={(e) => setMappingQuantity(parseInt(e.target.value, 10) || 1)}
-                      className="w-20 h-10"
+                      className="w-20 h-10 bg-red-50 border-red-200 text-red-400 cursor-not-allowed"
                       placeholder="1"
+                      disabled
                     />
                   </div>
                 </div>

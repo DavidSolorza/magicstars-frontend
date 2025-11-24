@@ -92,7 +92,7 @@ export function ProductFormModal({
             </div>
             <div className="min-w-0 flex-1">
               <DialogTitle className="text-lg leading-tight">
-                {isEditing ? 'Editar Producto' : 'Crear Nuevo Producto'}
+                {isEditing ? 'Crear Nuevo Producto' : 'Crear Nuevo Producto'}
               </DialogTitle>
               <DialogDescription className="mt-0.5 text-xs">
                 {isEditing
@@ -104,7 +104,7 @@ export function ProductFormModal({
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
+          <div className="space-y-2">J
             <Label htmlFor="producto" className="text-sm font-semibold">
               Nombre del Producto *
             </Label>

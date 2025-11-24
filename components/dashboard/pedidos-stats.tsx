@@ -10,11 +10,8 @@ import {
   CreditCard, 
   FileText, 
   TrendingUp, 
-  AlertCircle,
-  BarChart3,
-  PieChart
+  AlertCircle
 } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart as RechartsPieChart, Pie, Cell } from 'recharts';
 
 interface PedidosStatsProps {
   stats: {
@@ -51,15 +48,6 @@ export function PedidosStats({ stats, hasActiveFilters, totalPedidos }: PedidosS
     return total > 0 ? Math.min((value / total) * 100, 100) : 0;
   };
 
-  // Datos para gráficos
-  const statusChartData = [
-    { name: 'Entregados', value: stats.entregados, color: '#10b981' },
-    { name: 'Sin Asignar', value: stats.sinAsignar, color: '#f59e0b' },
-    { name: 'Asignados', value: stats.asignados, color: '#3b82f6' },
-    { name: 'Devoluciones', value: stats.devoluciones, color: '#ef4444' },
-    { name: 'Reagendados', value: stats.reagendados, color: '#f97316' }
-  ];
-
   const paymentChartData = [
     { name: 'Efectivo', value: stats.efectivo, color: '#10b981' },
     { name: 'SINPE', value: stats.sinpe, color: '#3b82f6' },
@@ -70,206 +58,87 @@ export function PedidosStats({ stats, hasActiveFilters, totalPedidos }: PedidosS
   return (
     <div className="space-y-6">
       {/* Cards de Estadísticas Principales */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        <Card className="border-l-4 border-l-blue-500 shadow-sm hover:shadow-md transition-shadow">
-          <CardContent className="p-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card className="relative overflow-hidden hover:shadow-lg transition-all duration-200 border-2 border-sky-200 dark:border-sky-800">
+          <div className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full bg-gradient-to-br from-sky-400/30 to-blue-400/30 blur-xl" />
+          <CardContent className="relative p-5">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                  <Package className="w-5 h-5 text-blue-600" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">Total Pedidos</p>
-                  <p className="text-xl font-bold">{stats.total.toLocaleString()}</p>
-                  <p className="text-xs text-green-600">
-                    {hasActiveFilters ? 'Filtrados' : `${totalPedidos.toLocaleString()} totales`}
-                  </p>
-                </div>
-              </div>
-              <div className="text-right">
-                <div className="flex items-center gap-1 text-green-600">
-                  <TrendingUp className="w-4 h-4" />
-                  <span className="text-sm font-medium">+12%</span>
-                </div>
-                <p className="text-xs text-muted-foreground">vs mes anterior</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        
-        <Card className="border-l-4 border-l-green-500 shadow-sm hover:shadow-md transition-shadow">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                  <CheckCircle className="w-5 h-5 text-green-600" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">Entregados</p>
-                  <p className="text-xl font-bold text-green-600">{stats.entregados.toLocaleString()}</p>
-                  <p className="text-xs text-green-600">
-                    {getPercentage(stats.entregados, stats.total)}% del total
-                  </p>
-                </div>
-              </div>
-              <div className="text-right">
-                <div className="flex items-center gap-1 text-green-600">
-                  <TrendingUp className="w-4 h-4" />
-                  <span className="text-sm font-medium">+5%</span>
-                </div>
-                <p className="text-xs text-muted-foreground">vs mes anterior</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        
-        <Card className="border-l-4 border-l-yellow-500 shadow-sm hover:shadow-md transition-shadow">
-          <CardContent className="p4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-yellow-100 rounded-lg flex items-center justify-center">
-                  <Clock className="w-5 h-5 text-yellow-600" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">Sin Asignar</p>
-                  <p className="text-xl font-bold text-yellow-600">{stats.sinAsignar.toLocaleString()}</p>
-                  <p className="text-xs text-yellow-600">Requieren atención</p>
-                </div>
-              </div>
-              <div className="text-right">
-                <div className="flex items-center gap-1 text-red-600">
-                  <AlertCircle className="w-4 h-4" />
-                  <span className="text-sm font-medium">Urgente</span>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  {getPercentage(stats.sinAsignar, stats.total)}% del total
+              <div className="flex-1">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Total Pedidos</p>
+                <p className="text-3xl font-bold text-sky-700 dark:text-sky-400">{stats.total.toLocaleString()}</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {hasActiveFilters ? 'Filtrados' : `${totalPedidos.toLocaleString()} totales`}
                 </p>
               </div>
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-sky-500 to-blue-500 text-white shadow-lg">
+                <Package className="w-6 h-6" />
+              </div>
             </div>
           </CardContent>
         </Card>
-        
-        <Card className="border-l-4 border-l-purple-500 shadow-sm hover:shadow-md transition-shadow">
-          <CardContent className="p-3">
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                  <DollarSign className="w-4 h-4 text-purple-600" />
-                </div>
-                <p className="text-sm font-medium text-muted-foreground">Valor Total</p>
+
+        <Card className="relative overflow-hidden hover:shadow-lg transition-all duration-200 border-2 border-emerald-200 dark:border-emerald-800">
+          <div className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full bg-gradient-to-br from-emerald-400/30 to-green-400/30 blur-xl" />
+          <CardContent className="relative p-5">
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Pedidos Entregados</p>
+                <p className="text-3xl font-bold text-emerald-700 dark:text-emerald-400">{stats.entregados.toLocaleString()}</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {stats.total > 0 ? Math.round((stats.entregados / stats.total) * 100) : 0}% del total
+                </p>
               </div>
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-bold text-purple-600 break-words" title={formatCurrency(stats.valorTotal)}>
-                    {formatCurrency(stats.valorTotal)}
-                  </p>
-                  <p className="text-xs text-green-600 mt-1">
-                    {hasActiveFilters ? 'Filtrado' : 'Todos los pedidos'}
-                  </p>
-                </div>
-                <div className="text-right flex-shrink-0">
-                  <div className="flex items-center gap-1 text-green-600">
-                    <TrendingUp className="w-3 h-3" />
-                    <span className="text-xs font-medium">+8%</span>
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-green-500 text-white shadow-lg">
+                <CheckCircle className="w-6 h-6" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="relative overflow-hidden hover:shadow-lg transition-all duration-200 border-2 border-rose-200 dark:border-rose-800">
+          <div className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full bg-gradient-to-br from-rose-400/30 to-red-400/30 blur-xl" />
+          <CardContent className="relative p-5">
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Sin Asignar</p>
+                <p className="text-3xl font-bold text-rose-700 dark:text-rose-400">{stats.sinAsignar.toLocaleString()}</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {stats.total > 0 ? Math.round((stats.sinAsignar / stats.total) * 100) : 0}% del total
+                </p>
+              </div>
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-rose-500 to-red-500 text-white shadow-lg">
+                <Clock className="w-6 h-6" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Métodos de Pago Stats */}
+      <div>
+        <h3 className="text-sm font-semibold text-muted-foreground mb-3 px-1">Distribución por Método de Pago</h3>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+          {paymentChartData.map((method) => (
+            <Card key={method.name} className="relative overflow-hidden hover:shadow-md transition-all duration-200 hover:scale-105">
+              <div className="pointer-events-none absolute -right-4 -top-4 h-16 w-16 rounded-full bg-gradient-to-br opacity-20" style={{ background: `${method.color}20` }} />
+              <CardContent className="relative p-4">
+                <div className="flex flex-col items-center text-center gap-2">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg" style={{ backgroundColor: `${method.color}10` }}>
+                    {method.name === 'Efectivo' && <DollarSign className="w-5 h-5" style={{ color: method.color }} />}
+                    {method.name === 'SINPE' && <CreditCard className="w-5 h-5" style={{ color: method.color }} />}
+                    {method.name === 'Tarjeta' && <CreditCard className="w-5 h-5" style={{ color: method.color }} />}
+                    {method.name === '2 Pagos' && <FileText className="w-5 h-5" style={{ color: method.color }} />}
                   </div>
-                  <p className="text-xs text-muted-foreground">vs mes anterior</p>
+                  <p className="text-xs font-medium text-muted-foreground">{method.name}</p>
+                  <p className="text-xl font-bold" style={{ color: method.color }}>{method.value.toLocaleString()}</p>
+                  <p className="text-xs text-muted-foreground">{getPercentage(method.value, stats.total)}%</p>
                 </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       </div>
 
-      {/* Métodos de Pago Stats con Charts */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {paymentChartData.map((method) => (
-          <Card key={method.name} className={`border-l-4 border-l-${method.color}-500 shadow-sm hover:shadow-md transition-shadow`}>
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-3">
-                  {method.name === 'Efectivo' && <DollarSign className="w-5 h-5 text-green-600" />}
-                  {method.name === 'SINPE' && <CreditCard className="w-5 h-5 text-blue-600" />}
-                  {method.name === 'Tarjeta' && <CreditCard className="w-5 h-5 text-purple-600" />}
-                  {method.name === '2 Pagos' && <FileText className="w-5 h-5 text-orange-600" />}
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">{method.name}</p>
-                    <p className="text-lg font-bold">{method.value.toLocaleString()}</p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="text-xs font-medium" style={{ color: method.color }}>
-                    {getPercentage(method.value, stats.total)}%
-                  </p>
-                </div>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div 
-                  className="h-2 rounded-full transition-all duration-300" 
-                  style={{ 
-                    width: `${getProgressWidth(method.value, stats.total)}%`,
-                    backgroundColor: method.color
-                  }}
-                ></div>
-              </div>
-              <div className="flex justify-between text-xs text-muted-foreground mt-1">
-                <span>0</span>
-                <span className="font-medium">{method.value}</span>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {/* Gráficas de Comparación */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Gráfica de Barras - Pedidos por Estado */}
-        <Card className="shadow-sm">
-          <CardContent className="p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <BarChart3 className="w-5 h-5 text-blue-600" />
-              <h3 className="text-lg font-semibold">Distribución de Pedidos por Estado</h3>
-            </div>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={statusChartData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" />
-                <YAxis />
-                <Tooltip formatter={(value) => [value, 'Pedidos']} />
-                <Bar dataKey="value" fill="#8884d8" />
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-
-        {/* Gráfica de Pie - Métodos de Pago */}
-        <Card className="shadow-sm">
-          <CardContent className="p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <PieChart className="w-5 h-5 text-blue-600" />
-              <h3 className="text-lg font-semibold">Distribución de Métodos de Pago</h3>
-            </div>
-            <ResponsiveContainer width="100%" height={300}>
-              <RechartsPieChart>
-                <Pie
-                  data={paymentChartData}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                  outerRadius={80}
-                  fill="#8884d8"
-                  dataKey="value"
-                >
-                  {paymentChartData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </RechartsPieChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-      </div>
     </div>
   );
 }

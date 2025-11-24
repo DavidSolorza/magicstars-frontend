@@ -876,53 +876,88 @@ export default function AdminRoutesPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 animate-spin" />
+      <div className="flex flex-col items-center justify-center gap-3 py-12">
+        <div className="relative w-6 h-6">
+          <div className="absolute inset-0 rounded-full border-2 border-sky-200/30"></div>
+          <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-sky-500 border-r-indigo-500 border-b-purple-500 animate-spin"></div>
+        </div>
+        <span className="text-sm text-muted-foreground">Cargando rutas...</span>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Asignación de Rutas</h1>
-          <p className="text-muted-foreground">
-            Optimiza y asigna rutas a mensajeros para máxima eficiencia
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button
-            onClick={handleRefreshAll}
-            disabled={loading || loadingUnassigned}
-            variant="outline"
-            size="sm"
-          >
-            <RefreshCw className={`w-4 h-4 mr-2 ${(loading || loadingUnassigned) ? 'animate-spin' : ''}`} />
-            Actualizar
-          </Button>
-          <Button onClick={handleGenerateRoutes} disabled={loading || generatingRoutes}>
-            {generatingRoutes ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Generando...
-              </>
-            ) : (
-              <>
-                <Route className="w-4 h-4 mr-2" />
-                Generar Rutas
-              </>
-            )}
-          </Button>
-          <Button onClick={() => setShowReassignDialog(true)} disabled={loading} variant="outline">
-            <RefreshCw className="w-4 h-4 mr-2" />
-            Reasignar Mensajero
-          </Button>
-          <Button onClick={() => setShowLocationSummaryDialog(true)} disabled={loading} variant="outline">
-            <MapPin className="w-4 h-4 mr-2" />
-            Resumen por Ubicación
-          </Button>
+    <div className="space-y-8">
+      {/* Header mejorado con gradiente */}
+      <div className="relative rounded-2xl bg-gradient-to-r from-sky-500 via-indigo-500 to-purple-500 p-8 text-white overflow-hidden">
+        <div className="absolute inset-0 opacity-20"></div>
+        <div className="relative flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+          <div className="flex items-center gap-4">
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/20 backdrop-blur-sm shadow-lg">
+              <Route className="h-8 w-8 text-white" />
+            </div>
+            <div>
+              <p className="inline-flex items-center gap-2 rounded-full bg-white/20 backdrop-blur-sm px-4 py-1.5 text-sm font-medium text-white mb-3">
+                <Truck className="h-4 w-4" />
+                Panel de gestión de rutas
+              </p>
+              <h1 className="text-4xl font-bold tracking-tight text-white mb-2">
+                Asignación de Rutas
+              </h1>
+              <p className="text-white/90 text-base">
+                Optimiza y asigna rutas a mensajeros para máxima eficiencia
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button
+              onClick={handleRefreshAll}
+              disabled={loading || loadingUnassigned}
+              className="flex items-center gap-2 bg-white/10 backdrop-blur-sm border-white/20 text-white hover:bg-white/20 transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+              variant="outline"
+            >
+              <RefreshCw className={`w-4 h-4 ${(loading || loadingUnassigned) ? 'animate-spin' : ''}`} />
+              <span>Actualizar</span>
+            </Button>
+            <Button 
+              onClick={handleGenerateRoutes} 
+              disabled={loading || generatingRoutes}
+              className="flex items-center gap-2 bg-white text-sky-600 hover:bg-white/90 transition-all duration-200 hover:scale-105 shadow-lg"
+            >
+              {generatingRoutes ? (
+                <>
+                  <div className="relative w-4 h-4">
+                    <div className="absolute inset-0 rounded-full border-2 border-sky-200/30"></div>
+                    <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-sky-500 border-r-indigo-500 animate-spin"></div>
+                  </div>
+                  <span>Generando...</span>
+                </>
+              ) : (
+                <>
+                  <Route className="w-4 h-4" />
+                  <span>Generar Rutas</span>
+                </>
+              )}
+            </Button>
+            <Button 
+              onClick={() => setShowReassignDialog(true)} 
+              disabled={loading}
+              className="flex items-center gap-2 bg-white/10 backdrop-blur-sm border-white/20 text-white hover:bg-white/20 transition-all duration-200 hover:scale-105"
+              variant="outline"
+            >
+              <RefreshCw className="w-4 h-4" />
+              <span>Reasignar Mensajero</span>
+            </Button>
+            <Button 
+              onClick={() => setShowLocationSummaryDialog(true)} 
+              disabled={loading}
+              className="flex items-center gap-2 bg-white/10 backdrop-blur-sm border-white/20 text-white hover:bg-white/20 transition-all duration-200 hover:scale-105"
+              variant="outline"
+            >
+              <MapPin className="w-4 h-4" />
+              <span>Resumen por Ubicación</span>
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -953,61 +988,69 @@ export default function AdminRoutesPage() {
         </CardContent>
       </Card>
 
-      {/* Stats Cards */}
+      {/* Stats Cards - Mejoradas */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-yellow-100 rounded-lg flex items-center justify-center">
-                <Package className="w-5 h-5 text-yellow-600" />
+        <Card className="relative overflow-hidden hover:shadow-lg transition-all duration-200 border-2 border-amber-200 dark:border-amber-800">
+          <div className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full bg-gradient-to-br from-amber-400/30 to-yellow-400/30 blur-xl" />
+          <CardContent className="relative p-5">
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Sin Asignar</p>
+                <p className="text-3xl font-bold text-amber-700 dark:text-amber-400">{unassignedOrders.length}</p>
+                <p className="text-xs text-muted-foreground mt-1">Pendientes</p>
               </div>
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Sin Asignar</p>
-                <p className="text-2xl font-bold">{unassignedOrders.length}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                <Truck className="w-5 h-5 text-blue-600" />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Asignados</p>
-                <p className="text-2xl font-bold">{assignedOrders.length}</p>
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-amber-500 to-yellow-500 text-white shadow-lg">
+                <Package className="w-6 h-6" />
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                <UserCheck className="w-5 h-5 text-green-600" />
+        <Card className="relative overflow-hidden hover:shadow-lg transition-all duration-200 border-2 border-sky-200 dark:border-sky-800">
+          <div className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full bg-gradient-to-br from-sky-400/30 to-blue-400/30 blur-xl" />
+          <CardContent className="relative p-5">
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Asignados</p>
+                <p className="text-3xl font-bold text-sky-700 dark:text-sky-400">{assignedOrders.length}</p>
+                <p className="text-xs text-muted-foreground mt-1">En ruta</p>
               </div>
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Mensajeros Activos</p>
-                <p className="text-2xl font-bold">{messengers.length}</p>
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-sky-500 to-blue-500 text-white shadow-lg">
+                <Truck className="w-6 h-6" />
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-                <Navigation className="w-5 h-5 text-purple-600" />
+        <Card className="relative overflow-hidden hover:shadow-lg transition-all duration-200 border-2 border-emerald-200 dark:border-emerald-800">
+          <div className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full bg-gradient-to-br from-emerald-400/30 to-green-400/30 blur-xl" />
+          <CardContent className="relative p-5">
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Mensajeros Activos</p>
+                <p className="text-3xl font-bold text-emerald-700 dark:text-emerald-400">{messengers.length}</p>
+                <p className="text-xs text-muted-foreground mt-1">Disponibles</p>
               </div>
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">En Ruta</p>
-                <p className="text-2xl font-bold">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-green-500 text-white shadow-lg">
+                <UserCheck className="w-6 h-6" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="relative overflow-hidden hover:shadow-lg transition-all duration-200 border-2 border-purple-200 dark:border-purple-800">
+          <div className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full bg-gradient-to-br from-purple-400/30 to-indigo-400/30 blur-xl" />
+          <CardContent className="relative p-5">
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">En Ruta</p>
+                <p className="text-3xl font-bold text-purple-700 dark:text-purple-400">
                   {orders.filter(o => o.status === 'en_ruta').length}
                 </p>
+                <p className="text-xs text-muted-foreground mt-1">Entregando</p>
+              </div>
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-purple-500 to-indigo-500 text-white shadow-lg">
+                <Navigation className="w-6 h-6" />
               </div>
             </div>
           </CardContent>
@@ -1335,7 +1378,10 @@ export default function AdminRoutesPage() {
               >
                 {loadingUnassigned ? (
                   <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    <div className="relative w-4 h-4 mr-2">
+                      <div className="absolute inset-0 rounded-full border-2 border-sky-200/30"></div>
+                      <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-sky-500 border-r-indigo-500 animate-spin"></div>
+                    </div>
                     Cargando...
                   </>
                 ) : (
@@ -1512,7 +1558,10 @@ export default function AdminRoutesPage() {
             >
               {loading ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <div className="relative w-4 h-4 mr-2">
+                    <div className="absolute inset-0 rounded-full border-2 border-sky-200/30"></div>
+                    <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-sky-500 border-r-indigo-500 animate-spin"></div>
+                  </div>
                   Generando...
                 </>
               ) : (
@@ -1602,7 +1651,10 @@ export default function AdminRoutesPage() {
             >
               {loading ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <div className="relative w-4 h-4 mr-2">
+                    <div className="absolute inset-0 rounded-full border-2 border-sky-200/30"></div>
+                    <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-sky-500 border-r-indigo-500 animate-spin"></div>
+                  </div>
                   Reasignando...
                 </>
               ) : (

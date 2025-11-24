@@ -3,7 +3,8 @@ import { PedidoTest } from '@/lib/types';
 import { getPedidos, getAllPedidos, updatePedido } from '@/lib/supabase-pedidos';
 
 export interface PedidosFilters {
-  searchTerm: string;
+  searchTerm: string; // Término en el input (no se usa para filtrar hasta que se presione buscar)
+  searchQuery: string; // Término real usado para filtrar
   statusFilter: string;
   distritoFilter: string;
   mensajeroFilter: string;
@@ -38,6 +39,7 @@ export interface PedidosPagination {
 
 const initialFilters: PedidosFilters = {
   searchTerm: '',
+  searchQuery: '',
   statusFilter: 'all',
   distritoFilter: 'all',
   mensajeroFilter: 'all',
@@ -121,7 +123,8 @@ export function usePedidos() {
            (filters.dateRange.start !== '' && filters.dateRange.end !== '') || 
            filters.tiendaFilter !== 'all' || 
            filters.metodoPagoFilter !== 'all' ||
-           filters.showFutureOrders;
+           filters.showFutureOrders ||
+           filters.searchQuery !== ''; // Incluir búsqueda para que se recarguen los datos
     
     
     return hasFilters;
@@ -133,14 +136,45 @@ export function usePedidos() {
     const filtered = pedidosToFilter.filter(pedido => {
       if (!pedido.id_pedido) return false;
 
-      // Filtro de búsqueda
-      const matchesSearch = filters.searchTerm === '' || 
-        (pedido.id_pedido?.toLowerCase() || '').includes(filters.searchTerm.toLowerCase()) ||
-        (pedido.cliente_nombre?.toLowerCase() || '').includes(filters.searchTerm.toLowerCase()) ||
-        (pedido.cliente_telefono?.toLowerCase() || '').includes(filters.searchTerm.toLowerCase()) ||
-        (pedido.distrito?.toLowerCase() || '').includes(filters.searchTerm.toLowerCase()) ||
-        (pedido.productos?.toLowerCase() || '').includes(filters.searchTerm.toLowerCase()) ||
-        (pedido.mensajero_asignado && pedido.mensajero_asignado.toLowerCase().includes(filters.searchTerm.toLowerCase()));
+      // Filtro de búsqueda (usa searchQuery, no searchTerm)
+      // Mejora: búsqueda más precisa por ID de pedido
+      const searchTerm = filters.searchQuery.trim().toLowerCase();
+      let matchesSearch = false;
+      
+      if (searchTerm === '') {
+        matchesSearch = true;
+      } else {
+        const pedidoId = (pedido.id_pedido || '').toLowerCase();
+        
+        // Detectar si es una búsqueda por ID (formato típico: letras seguidas de números, ej: SL5807, VT5851, WS3057)
+        // También acepta solo números si son 4+ dígitos (probablemente parte de un ID)
+        const trimmedQuery = filters.searchQuery.trim();
+        const isIdSearch = /^[A-Za-z]{1,4}\d{3,}$/i.test(trimmedQuery) || 
+                          /^\d{4,}$/.test(trimmedQuery) ||
+                          (trimmedQuery.length >= 4 && /^[A-Za-z0-9]+$/i.test(trimmedQuery));
+        
+        if (isIdSearch && pedidoId) {
+          // Búsqueda precisa por ID: coincidencia exacta o que empiece con el ID
+          // Priorizar coincidencia exacta
+          if (pedidoId === searchTerm) {
+            matchesSearch = true;
+          } else if (pedidoId.startsWith(searchTerm)) {
+            matchesSearch = true;
+          } else {
+            // Si no coincide exactamente ni empieza con, buscar como substring solo en el ID
+            matchesSearch = pedidoId.includes(searchTerm);
+          }
+        } else {
+          // Búsqueda general en múltiples campos
+          matchesSearch = 
+            pedidoId.includes(searchTerm) ||
+            (pedido.cliente_nombre?.toLowerCase() || '').includes(searchTerm) ||
+            (pedido.cliente_telefono?.toLowerCase() || '').includes(searchTerm) ||
+            (pedido.distrito?.toLowerCase() || '').includes(searchTerm) ||
+            (pedido.productos?.toLowerCase() || '').includes(searchTerm) ||
+            !!(pedido.mensajero_asignado && pedido.mensajero_asignado.toLowerCase().includes(searchTerm));
+        }
+      }
 
       // Filtro de estado
       const matchesStatus = filters.statusFilter === 'all' || 
@@ -314,7 +348,7 @@ export function usePedidos() {
   const stats = useMemo((): PedidosStats => {
     const dataSource = allPedidos.length > 0 ? allPedidos : pedidos;
     
-    if (!hasServerSideFilters && !filters.searchTerm) {
+    if (!hasServerSideFilters && !filters.searchQuery) {
       return {
         total: dataSource.length,
         asignados: dataSource.filter(p => p.mensajero_asignado && !p.mensajero_concretado).length,
@@ -344,7 +378,7 @@ export function usePedidos() {
       tarjeta: filtered.filter(p => p.metodo_pago && p.metodo_pago.toLowerCase() === 'tarjeta').length,
       dosPagos: filtered.filter(p => p.metodo_pago && (p.metodo_pago.toLowerCase() === '2pagos' || p.metodo_pago.toLowerCase() === '2 pagos')).length,
     };
-  }, [allPedidos, pedidos, hasServerSideFilters, filters.searchTerm, filterPedidos]);
+  }, [allPedidos, pedidos, hasServerSideFilters, filters.searchQuery, filterPedidos]);
 
   // Obtener listas únicas para filtros
   const filterOptions = useMemo(() => {
@@ -366,6 +400,15 @@ export function usePedidos() {
     setFilters(prev => ({ ...prev, ...newFilters }));
     setPagination(prev => ({ ...prev, currentPage: 1 })); // Reset a la primera página
   }, []);
+
+  // Función para ejecutar la búsqueda (se llama cuando se presiona Enter o el botón)
+  const executeSearch = useCallback(() => {
+    const trimmedSearch = filters.searchTerm.trim();
+    setFilters(prev => ({ ...prev, searchQuery: trimmedSearch }));
+    setPagination(prev => ({ ...prev, currentPage: 1 }));
+    // Forzar recarga inmediata después de actualizar el filtro
+    // El useEffect se encargará de recargar cuando cambien los filtros
+  }, [filters.searchTerm]);
 
   // Limpiar todos los filtros
   const clearAllFilters = useCallback(() => {
@@ -427,5 +470,6 @@ export function usePedidos() {
     updatePagination,
     updatePedidoStatus,
     loadPedidos,
+    executeSearch,
   };
 }

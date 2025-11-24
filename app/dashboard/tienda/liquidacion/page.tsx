@@ -37,6 +37,8 @@ import {
   Target,
   AlertTriangle
 } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 interface LiquidacionTiendaData {
   tienda: string;
@@ -69,6 +71,9 @@ export default function TiendaLiquidacion() {
   // Filtros para la tabla
   const [filtroEstado, setFiltroEstado] = useState<string>('todos');
   const [filtroMetodoPago, setFiltroMetodoPago] = useState<string>('todos');
+  
+  // Modal de pedidos pendientes
+  const [showPendingOrdersModal, setShowPendingOrdersModal] = useState(false);
 
   useEffect(() => {
     if (user?.tiendaName) {
@@ -175,20 +180,36 @@ export default function TiendaLiquidacion() {
     // Pedidos restantes (asignados - entregados)
     const pedidosRestantes = pedidosAsignados - pedidosEntregados;
     
+    // Pedidos pendientes (todos menos entregados) - esto incluye todos los estados excepto entregado
+    const pedidosPendientes = liquidacion.pedidos.filter(p => 
+      p.estado_pedido?.toLowerCase() !== 'entregado'
+    ).length;
+    
+    // Tasa de entrega (entregados / total)
+    const tasaEntrega = totalPedidos > 0 ? (pedidosEntregados / totalPedidos) * 100 : 0;
+    
     // Desglose de pedidos restantes por estado
     const pedidosRestantesDesglose = liquidacion.pedidos
-      .filter(p => p.mensajero_asignado && p.estado_pedido !== 'entregado')
+      .filter(p => p.mensajero_asignado && p.estado_pedido?.toLowerCase() !== 'entregado')
       .reduce((acc, pedido) => {
         const estado = pedido.estado_pedido || 'pendiente';
         acc[estado] = (acc[estado] || 0) + 1;
         return acc;
       }, {} as Record<string, number>);
+    
+    // Pedidos pendientes para el modal
+    const pedidosPendientesList = liquidacion.pedidos.filter(p => 
+      p.estado_pedido?.toLowerCase() !== 'entregado'
+    );
 
     return {
       tasaConversion,
       pedidosRestantes,
       pedidosAsignados,
-      pedidosRestantesDesglose
+      pedidosRestantesDesglose,
+      pedidosPendientes,
+      tasaEntrega,
+      pedidosPendientesList
     };
   }, [liquidacion]);
 
@@ -220,11 +241,12 @@ export default function TiendaLiquidacion() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <Loader2 className="w-12 h-12 mx-auto mb-4 text-blue-600 animate-spin" />
-          <p className="text-muted-foreground">Cargando liquidación...</p>
+      <div className="flex flex-col items-center justify-center gap-3 py-12 min-h-[60vh]">
+        <div className="relative w-6 h-6">
+          <div className="absolute inset-0 rounded-full border-2 border-sky-200/30"></div>
+          <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-sky-500 border-r-indigo-500 border-b-purple-500 animate-spin"></div>
         </div>
+        <p className="text-sm text-muted-foreground">Cargando liquidación...</p>
       </div>
     );
   }
@@ -267,27 +289,99 @@ export default function TiendaLiquidacion() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center gap-4">
-            <div className="flex-1">
-              <Label htmlFor="fecha">Fecha</Label>
-              <Input
-                id="fecha"
-                type="date"
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
-                className="mt-1"
-              />
+          <div className="flex flex-col gap-4">
+            {/* Botones de filtro rápido */}
+            <div className="space-y-2">
+              <Label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                <Filter className="w-4 h-4" />
+                Filtros Rápidos
+              </Label>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const fecha = new Date();
+                    fecha.setDate(fecha.getDate() - 7);
+                    setSelectedDate(fecha.toISOString().split('T')[0]);
+                  }}
+                  className="hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700"
+                >
+                  Última semana (7 días pasados)
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const fecha = new Date();
+                    fecha.setDate(fecha.getDate() - 14);
+                    setSelectedDate(fecha.toISOString().split('T')[0]);
+                  }}
+                  className="hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700"
+                >
+                  Últimos 14 días
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const fecha = new Date();
+                    fecha.setDate(fecha.getDate() - 30);
+                    setSelectedDate(fecha.toISOString().split('T')[0]);
+                  }}
+                  className="hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700"
+                >
+                  Últimos 30 días
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const hoy = new Date();
+                    const primerDia = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+                    setSelectedDate(primerDia.toISOString().split('T')[0]);
+                  }}
+                  className="hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700"
+                >
+                  Mes actual
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const hoy = new Date();
+                    const primerDiaMesPasado = new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1);
+                    setSelectedDate(primerDiaMesPasado.toISOString().split('T')[0]);
+                  }}
+                  className="hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700"
+                >
+                  Mes pasado
+                </Button>
+              </div>
             </div>
-            <div className="flex items-end">
-              <Button onClick={loadLiquidacion} disabled={loading}>
-                <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-                Actualizar
-              </Button>
+            
+            <div className="flex items-center gap-4">
+              <div className="flex-1">
+                <Label htmlFor="fecha">Fecha</Label>
+                <Input
+                  id="fecha"
+                  type="date"
+                  value={selectedDate}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                  className="mt-1"
+                />
+              </div>
+              <div className="flex items-end">
+                <Button onClick={loadLiquidacion} disabled={loading}>
+                  <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+                  Actualizar
+                </Button>
+              </div>
             </div>
+            <p className="text-sm text-muted-foreground">
+              Liquidación para el {formatDate(selectedDate)}
+            </p>
           </div>
-          <p className="text-sm text-muted-foreground mt-2">
-            Liquidación para el {formatDate(selectedDate)}
-          </p>
         </CardContent>
       </Card>
 
@@ -340,7 +434,8 @@ export default function TiendaLiquidacion() {
               </CardContent>
             </Card>
 
-            <Card className="border-l-4 border-l-yellow-500 shadow-sm hover:shadow-md transition-shadow">
+            <Card className="border-l-4 border-l-yellow-500 shadow-sm hover:shadow-md transition-shadow cursor-pointer" 
+                  onClick={() => metricasAdicionales?.pedidosPendientes && metricasAdicionales.pedidosPendientes > 0 && setShowPendingOrdersModal(true)}>
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
@@ -348,20 +443,29 @@ export default function TiendaLiquidacion() {
                       <Clock className="w-5 h-5 text-yellow-600" />
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-muted-foreground">Pendientes</p>
-                      <p className="text-2xl font-bold text-yellow-600">{liquidacion.pendingOrders}</p>
+                      <p className="text-sm font-medium text-muted-foreground">Pedidos Pendientes</p>
+                      <p className="text-2xl font-bold text-yellow-600">
+                        {metricasAdicionales?.pedidosPendientes ?? liquidacion.pendingOrders}
+                      </p>
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="flex items-center gap-1 text-yellow-600">
-                      <Clock className="w-4 h-4" />
-                      <span className="text-sm font-medium">En proceso</span>
+                    <div className="flex items-center gap-2">
+                      <div className="text-right">
+                        <p className="text-xs font-medium text-yellow-600">
+                          {metricasAdicionales?.tasaEntrega ? Math.round(metricasAdicionales.tasaEntrega) : 0}%
+                        </p>
+                        <p className="text-xs text-muted-foreground">Tasa de Entrega</p>
+                      </div>
                     </div>
-                    <p className="text-xs text-muted-foreground">
-                      {liquidacion.pedidos.length > 0 ? Math.round((liquidacion.pendingOrders / liquidacion.pedidos.length) * 100) : 0}% del total
-                    </p>
                   </div>
                 </div>
+                {metricasAdicionales?.pedidosPendientes && metricasAdicionales.pedidosPendientes > 0 && (
+                  <p className="text-xs text-yellow-600 mt-2 flex items-center gap-1">
+                    <Eye className="w-3 h-3" />
+                    Click para ver detalles
+                  </p>
+                )}
               </CardContent>
             </Card>
 
@@ -1245,6 +1349,130 @@ export default function TiendaLiquidacion() {
           </CardContent>
         </Card>
       )}
+
+      {/* Modal de Pedidos Pendientes */}
+      <Dialog open={showPendingOrdersModal} onOpenChange={setShowPendingOrdersModal}>
+        <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Clock className="w-5 h-5 text-yellow-600" />
+              Pedidos Pendientes - {formatDate(selectedDate)}
+            </DialogTitle>
+            <p className="text-sm text-muted-foreground">
+              Total: {metricasAdicionales?.pedidosPendientes || 0} pedidos pendientes
+              {metricasAdicionales?.tasaEntrega !== undefined && (
+                <> • Tasa de entrega: {Math.round(metricasAdicionales.tasaEntrega)}%</>
+              )}
+            </p>
+          </DialogHeader>
+          
+          {metricasAdicionales?.pedidosPendientesList && metricasAdicionales.pedidosPendientesList.length > 0 ? (
+            <div className="rounded-md border overflow-hidden">
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>ID Pedido</TableHead>
+                      <TableHead>Cliente</TableHead>
+                      <TableHead>Estado</TableHead>
+                      <TableHead>Valor</TableHead>
+                      <TableHead>Método Pago</TableHead>
+                      <TableHead>Distrito</TableHead>
+                      <TableHead>Mensajero</TableHead>
+                      <TableHead>Fecha Creación</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {metricasAdicionales.pedidosPendientesList.map((pedido) => (
+                      <TableRow key={pedido.id_pedido}>
+                        <TableCell className="font-medium">
+                          <div className="flex items-center gap-2">
+                            <Package className="w-4 h-4 text-blue-600" />
+                            {pedido.id_pedido}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="space-y-1">
+                            <p className="text-sm font-medium">{pedido.cliente_nombre || 'Sin nombre'}</p>
+                            <p className="text-xs text-gray-500">
+                              📞 {pedido.cliente_telefono || 'Sin teléfono'}
+                            </p>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge className={`${getStatusColor(pedido.estado_pedido)} font-semibold px-2 py-1`}>
+                            {pedido.estado_pedido?.toUpperCase() || 'PENDIENTE'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="text-right">
+                            <p className="text-sm font-bold">{formatCurrency(pedido.valor_total)}</p>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            {pedido.metodo_pago?.toLowerCase() === 'efectivo' && <DollarSign className="w-4 h-4 text-green-600" />}
+                            {pedido.metodo_pago?.toLowerCase() === 'sinpe' && <Smartphone className="w-4 h-4 text-blue-600" />}
+                            {pedido.metodo_pago?.toLowerCase() === 'tarjeta' && <CreditCard className="w-4 h-4 text-purple-600" />}
+                            <span className="text-sm">
+                              {(pedido.metodo_pago || 'Sin método').charAt(0).toUpperCase() + (pedido.metodo_pago || 'Sin método').slice(1)}
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="space-y-1">
+                            <p className="text-sm">{pedido.distrito || 'Sin distrito'}</p>
+                            <p className="text-xs text-gray-500">{pedido.canton || 'Sin cantón'}</p>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          {pedido.mensajero_asignado ? (
+                            <div className="flex items-center gap-1">
+                              <User className="w-3 h-3 text-blue-600" />
+                              <span className="text-sm">{pedido.mensajero_asignado}</span>
+                            </div>
+                          ) : (
+                            <span className="text-sm text-gray-500">Sin asignar</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <div className="text-sm">
+                            {formatDate(pedido.fecha_creacion)}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              
+              {/* Resumen del modal */}
+              <div className="bg-gray-50 px-4 py-3 border-t">
+                <div className="flex items-center justify-between text-sm text-gray-600">
+                  <span>
+                    Total de pedidos pendientes: <strong>{metricasAdicionales.pedidosPendientesList.length}</strong>
+                  </span>
+                  <div className="flex items-center gap-4">
+                    <span>
+                      Valor total: <strong className="text-gray-900">
+                        {formatCurrency(
+                          metricasAdicionales.pedidosPendientesList.reduce((sum, p) => sum + p.valor_total, 0)
+                        )}
+                      </strong>
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="text-center py-12 text-muted-foreground">
+              <CheckCircle className="w-16 h-16 mx-auto mb-4 text-green-600 opacity-50" />
+              <h3 className="text-lg font-semibold mb-2">No hay pedidos pendientes</h3>
+              <p>Todos los pedidos han sido entregados.</p>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -59,6 +59,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/auth-context';
 import {
   UsuarioRow,
   fetchUsuarios,
@@ -174,6 +175,7 @@ const getRoleLabel = (role: string) => {
 
 export default function UsuariosPage() {
   const { toast } = useToast();
+  const { user: currentUser } = useAuth();
   const [users, setUsers] = useState<UsuarioRow[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<UsuarioRow[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -342,6 +344,16 @@ export default function UsuariosPage() {
   };
 
   const openEditModal = (usuario: UsuarioRow) => {
+    // Verificar si el usuario actual es master y está intentando editar un admin o master
+    if (currentUser && currentUser.role === 'master' && (usuario.rol === 'admin' || usuario.rol === 'master')) {
+      toast({
+        variant: 'destructive',
+        title: 'Acceso denegado',
+        description: 'Los usuarios master no pueden editar el perfil ni los permisos de otros master y administradores.',
+      });
+      return;
+    }
+    
     setFormMode('edit');
     setSelectedUser(usuario);
     
@@ -433,6 +445,30 @@ export default function UsuariosPage() {
       return;
     }
 
+    // Verificar restricciones para master
+    if (currentUser && currentUser.role === 'master') {
+      // Master no puede crear admin o master
+      if (formMode === 'create' && (payload.rol === 'admin' || payload.rol === 'master')) {
+        setFormError('Los usuarios master no pueden crear administradores ni otros masters.');
+        setProcessing(false);
+        return;
+      }
+      
+      // Master no puede editar admin o master
+      if (formMode === 'edit' && selectedUser && (selectedUser.rol === 'admin' || selectedUser.rol === 'master')) {
+        setFormError('Los usuarios master no pueden editar el perfil ni los permisos de otros master y administradores.');
+        setProcessing(false);
+        return;
+      }
+      
+      // Master no puede cambiar el rol de un usuario a admin o master
+      if (formMode === 'edit' && selectedUser && (payload.rol === 'admin' || payload.rol === 'master')) {
+        setFormError('Los usuarios master no pueden asignar roles de administrador o master.');
+        setProcessing(false);
+        return;
+      }
+    }
+
     try {
       if (formMode === 'create') {
         // Generar email base
@@ -499,6 +535,17 @@ export default function UsuariosPage() {
   const handleDelete = async () => {
     if (!deleteTarget) return;
 
+    // Verificar si el usuario actual es master y está intentando eliminar un admin o master
+    if (currentUser && currentUser.role === 'master' && (deleteTarget.rol === 'admin' || deleteTarget.rol === 'master')) {
+      toast({
+        variant: 'destructive',
+        title: 'Acceso denegado',
+        description: 'Los usuarios master no pueden eliminar administradores ni otros masters.',
+      });
+      setDeleteTarget(null);
+      return;
+    }
+
     try {
       setProcessing(true);
       const deletedSnapshot = deleteTarget;
@@ -550,11 +597,12 @@ export default function UsuariosPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p>Cargando usuarios...</p>
+      <div className="flex flex-col items-center justify-center gap-3 py-12 min-h-[60vh]">
+        <div className="relative w-6 h-6">
+          <div className="absolute inset-0 rounded-full border-2 border-sky-200/30"></div>
+          <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-sky-500 border-r-indigo-500 border-b-purple-500 animate-spin"></div>
         </div>
+        <p className="text-sm text-muted-foreground">Cargando usuarios...</p>
       </div>
     );
   }
@@ -1041,16 +1089,20 @@ export default function UsuariosPage() {
                           size="icon"
                           onClick={() => openEditModal(usuario)}
                           aria-label="Editar usuario"
-                            className="transition-all duration-200 hover:scale-110 hover:bg-emerald-100 dark:hover:bg-emerald-900/30"
+                          disabled={!!(currentUser && currentUser.role === 'master' && (usuario.rol === 'admin' || usuario.rol === 'master'))}
+                            className="transition-all duration-200 hover:scale-110 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                          title={currentUser && currentUser.role === 'master' && (usuario.rol === 'admin' || usuario.rol === 'master') ? 'No puedes editar administradores ni masters' : 'Editar usuario'}
                         >
                           <Pencil className="w-4 h-4" />
                         </Button>
                         <Button
                           variant="ghost"
                           size="icon"
-                            className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/30 transition-all duration-200 hover:scale-110"
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/30 transition-all duration-200 hover:scale-110 disabled:opacity-50 disabled:cursor-not-allowed"
                           onClick={() => setDeleteTarget(usuario)}
                           aria-label="Eliminar usuario"
+                          disabled={!!(currentUser && currentUser.role === 'master' && (usuario.rol === 'admin' || usuario.rol === 'master'))}
+                          title={currentUser && currentUser.role === 'master' && (usuario.rol === 'admin' || usuario.rol === 'master') ? 'No puedes eliminar administradores ni masters' : 'Eliminar usuario'}
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>

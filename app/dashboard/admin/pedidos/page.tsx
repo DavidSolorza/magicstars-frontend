@@ -17,7 +17,8 @@ import {
   Loader2,
   Edit3,
   Save,
-  CheckCircle
+  CheckCircle,
+  Package
 } from 'lucide-react';
 import { API_URLS, apiRequest } from '@/lib/config';
 
@@ -46,6 +47,7 @@ export default function AdminPedidosPage() {
     updatePagination,
     updatePedidoStatus,
     loadPedidos,
+    executeSearch,
   } = usePedidos();
 
   // Estados para modales
@@ -269,40 +271,58 @@ export default function AdminPedidosPage() {
 
   if (loading && pedidos.length === 0) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 animate-spin" />
-        <span className="ml-2 text-gray-600">Cargando pedidos...</span>
+      <div className="flex flex-col items-center justify-center gap-3 py-12">
+        <div className="relative w-6 h-6">
+          <div className="absolute inset-0 rounded-full border-2 border-sky-200/30"></div>
+          <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-sky-500 border-r-indigo-500 border-b-purple-500 animate-spin"></div>
+        </div>
+        <span className="text-sm text-muted-foreground">Cargando pedidos...</span>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Gestión de Pedidos</h1>
-          <p className="text-muted-foreground">
-            Administra todos los pedidos del sistema con capacidades de edición avanzadas
-          </p>
-          <p className="text-sm text-muted-foreground mt-1">
-            {hasServerSideFilters ? (
-              <>Mostrando {pedidos.length} de {pagination.totalPedidos} pedidos filtrados</>
-            ) : (
-              <>Mostrando {pedidos.length} de {pagination.totalPedidos} pedidos totales</>
-            )}
-          </p>
-        </div>
-        <div className="flex items-center space-x-4">
-          <Button 
-            onClick={handleUpdate} 
-            disabled={updating || !canUpdate()}
-            variant="outline"
-            className="bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 text-white font-semibold shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none border-0"
-          >
-            <div className="flex items-center gap-2">
+    <div className="space-y-8">
+      {/* Header mejorado con gradiente */}
+      <div className="relative rounded-2xl bg-gradient-to-r from-sky-500 via-indigo-500 to-purple-500 p-8 text-white overflow-hidden">
+        <div className="absolute inset-0 opacity-20"></div>
+        <div className="relative flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+          <div className="flex items-center gap-4">
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/20 backdrop-blur-sm shadow-lg">
+              <Package className="h-8 w-8 text-white" />
+            </div>
+            <div>
+              <p className="inline-flex items-center gap-2 rounded-full bg-white/20 backdrop-blur-sm px-4 py-1.5 text-sm font-medium text-white mb-3">
+                <Package className="h-4 w-4" />
+                Panel de gestión de pedidos
+              </p>
+              <h1 className="text-4xl font-bold tracking-tight text-white mb-2">
+                Gestión de Pedidos
+              </h1>
+              <p className="text-white/90 text-base">
+                Administra todos los pedidos del sistema con capacidades de edición avanzadas.
+              </p>
+              <p className="text-sm text-white/80 mt-2">
+                {hasServerSideFilters ? (
+                  <>Mostrando {pedidos.length} de {pagination.totalPedidos} pedidos filtrados</>
+                ) : (
+                  <>Mostrando {pedidos.length} de {pagination.totalPedidos} pedidos totales</>
+                )}
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button 
+              onClick={handleUpdate} 
+              disabled={updating || !canUpdate()}
+              className="flex items-center gap-2 bg-white/10 backdrop-blur-sm border-white/20 text-white hover:bg-white/20 transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+              variant="outline"
+            >
               {updating ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
+                <div className="relative w-4 h-4">
+                  <div className="absolute inset-0 rounded-full border-2 border-sky-200/30"></div>
+                  <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-sky-500 border-r-indigo-500 animate-spin"></div>
+                </div>
               ) : (
                 <RefreshCw className="w-4 h-4" />
               )}
@@ -314,22 +334,25 @@ export default function AdminPedidosPage() {
                   ({getTimeUntilNextUpdate()})
                 </span>
               )}
-            </div>
-          </Button>
-          
-          <Button 
-            variant="outline" 
-            className="bg-orange-50 border-orange-200 text-orange-700 hover:bg-orange-100"
-            onClick={() => setIsDiscrepancyModalOpen(true)}
-          >
-            <AlertCircle className="w-4 h-4 mr-2" />
-            Revisar discrepancias
-          </Button>
-          
-          <Button>
-            <Download className="w-4 h-4 mr-2" />
-            Exportar
-          </Button>
+            </Button>
+            
+            <Button 
+              variant="outline"
+              className="flex items-center gap-2 bg-white/10 backdrop-blur-sm border-white/20 text-white hover:bg-white/20 transition-all duration-200 hover:scale-105"
+              onClick={() => setIsDiscrepancyModalOpen(true)}
+            >
+              <AlertCircle className="w-4 h-4" />
+              Revisar discrepancias
+            </Button>
+            
+            <Button 
+              variant="outline"
+              className="flex items-center gap-2 bg-white text-sky-600 hover:bg-white/90 transition-all duration-200 hover:scale-105 shadow-lg"
+            >
+              <Download className="w-4 h-4" />
+              Exportar
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -361,6 +384,7 @@ export default function AdminPedidosPage() {
         stats={stats}
         onFilterChange={updateFilters}
         onClearFilters={clearAllFilters}
+        onExecuteSearch={executeSearch}
         hasActiveFilters={hasActiveFilters}
       />
 
@@ -486,7 +510,10 @@ export default function AdminPedidosPage() {
                   disabled={updatingPedido === selectedPedido.id_pedido}
                 >
                   {updatingPedido === selectedPedido.id_pedido ? (
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    <div className="relative w-4 h-4 mr-2">
+                      <div className="absolute inset-0 rounded-full border-2 border-sky-200/30"></div>
+                      <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-sky-500 border-r-indigo-500 animate-spin"></div>
+                    </div>
                   ) : (
                     <Save className="w-4 h-4 mr-2" />
                   )}

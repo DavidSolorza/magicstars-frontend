@@ -312,6 +312,7 @@ export default function AdminPedidosPageRefactored() {
         onFilterChange={updateFilters}
         onClearFilters={clearAllFilters}
         hasActiveFilters={hasActiveFilters}
+        onExecuteSearch={loadPedidos}
       />
 
       {/* Tabla de Pedidos */}

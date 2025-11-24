@@ -43,7 +43,7 @@ export function OrderStatusBadge({ status, className }: OrderStatusBadgeProps) {
   return (
     <Badge
       variant="outline"
-      className={cn(config.className, className)}
+      className={cn(config.className, 'text-[10px] px-1.5 py-0.5 font-medium', className)}
     >
       {config.label}
     </Badge>

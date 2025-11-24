@@ -5,7 +5,7 @@ import { useAuth } from '@/contexts/auth-context';
 import { InventoryItem, InventoryStats, InventoryAlert, InventoryTransaction, Company } from '@/lib/types';
 import { obtenerInventarioPorTienda, ProductoInventario } from '@/lib/supabase-inventario';
 import { StatsCard } from '@/components/dashboard/stats-card';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -19,14 +19,8 @@ import {
   TrendingUp,
   Search,
   XCircle,
-} from 'lucide-react';
-import { Loader2 } from 'lucide-react';
-import Link from 'next/link';
-import { InventoryMovements } from '@/components/dashboard/inventory-movements';
-import { ProductFormModal } from '@/components/dashboard/product-form-modal';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
-import {
+  Building2,
+  RefreshCw,
   Settings,
   ArrowDown,
   ArrowUp,
@@ -34,12 +28,22 @@ import {
   CheckCircle2,
   Plus,
   Edit,
-  Building2,
-  RefreshCw,
+  Trash2,
+  Filter,
+  Warehouse,
+  BookOpen,
 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
+import Link from 'next/link';
+import { InventoryMovements } from '@/components/dashboard/inventory-movements';
+import { CreateProductModal } from '@/components/dashboard/create-product-modal';
+import { EditProductModal } from '@/components/dashboard/edit-product-modal';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { useToast } from '@/hooks/use-toast';
 
 const DEFAULT_MINIMUM_STOCK = 5;
-const DEFAULT_MAXIMUM_STOCK = 1000;
+const DEFAULT_MAXIMUM_STOCK = 100; // Límite provisional de 100
 
 // Tipo para configuraciones de alertas por producto
 type StockAlertConfig = {
@@ -85,10 +89,19 @@ const saveAlertConfig = (key: ProductKey, config: StockAlertConfig) => {
   }
 };
 
+type StockStatus = 'in_stock' | 'low_stock' | 'out_of_stock' | 'overstock';
+type StockFilterValue = 'all' | StockStatus;
+
+type StatusInfo = {
+  status: StockStatus;
+  label: string;
+  variant: 'default' | 'secondary' | 'destructive';
+};
+
 const getStatusInfo = (
   quantity: number,
   config?: StockAlertConfig
-): { status: string; label: string; variant: 'default' | 'secondary' | 'destructive' } => {
+): StatusInfo => {
   const stockMinimo = config?.stockMinimo ?? DEFAULT_MINIMUM_STOCK;
   const stockMaximo = config?.stockMaximo ?? DEFAULT_MAXIMUM_STOCK;
 
@@ -106,13 +119,16 @@ const getStatusInfo = (
 
 export default function AdvisorInventoryPage() {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
+  const [productosOriginales, setProductosOriginales] = useState<ProductoInventario[]>([]); // Guardar productos originales de la BD
   const [stats, setStats] = useState<InventoryStats | null>(null);
   const [alerts, setAlerts] = useState<InventoryAlert[]>([]);
   const [transactions, setTransactions] = useState<InventoryTransaction[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [stockFilter, setStockFilter] = useState<string>('all');
+  const [stockFilter, setStockFilter] = useState<StockFilterValue>('all');
   
   // Estados para el modal de configuración de alertas
   const [showAlertConfigModal, setShowAlertConfigModal] = useState(false);
@@ -120,9 +136,17 @@ export default function AdvisorInventoryPage() {
   const [alertConfig, setAlertConfig] = useState<StockAlertConfig>({});
   const [alertConfigs, setAlertConfigs] = useState<Record<ProductKey, StockAlertConfig>>({});
   
-  // Estados para el modal de productos
-  const [showProductModal, setShowProductModal] = useState(false);
+  // Estados para los modales de productos
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<ProductoInventario | null>(null);
+  
+  // Estados para el modal de confirmación de eliminación
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [productToDelete, setProductToDelete] = useState<ProductoInventario | null>(null);
+  
+  // Estado para productos agregando al diccionario
+  const [addingToDictionary, setAddingToDictionary] = useState<Set<string>>(new Set());
 
   const resolveCompanyInfo = (): Company => {
     const now = new Date().toISOString();
@@ -246,6 +270,10 @@ export default function AdvisorInventoryPage() {
       setLoading(true);
       const storeName = user.company?.name ?? user.companyId ?? 'ALL STARS';
       const productos = await obtenerInventarioPorTienda(storeName);
+      
+      // Guardar productos originales de la base de datos para usar el nombre exacto
+      setProductosOriginales(productos);
+      
       const mappedItems = mapProductosToInventoryItems(productos);
       const computedStats = buildInventoryStats(mappedItems);
       const computedAlerts = buildInventoryAlerts(mappedItems);
@@ -309,65 +337,310 @@ export default function AdvisorInventoryPage() {
 
   // Funciones para productos
   const handleCreateProduct = () => {
-    setEditingProduct(null);
-    setShowProductModal(true);
+    setShowCreateModal(true);
   };
 
   const handleEditProduct = (item: ProductoInventario) => {
     setEditingProduct(item);
-    setShowProductModal(true);
+    setShowEditModal(true);
   };
 
-  const handleSaveProduct = (productData: Omit<ProductoInventario, 'idx'>) => {
-    console.log('Guardar producto:', productData);
-    loadData();
-  };
-
-  const getStockStatus = (item: InventoryItem, producto?: ProductoInventario) => {
-    if (producto) {
-      const key = getProductKey(producto.tienda, producto.producto);
-      const config = alertConfigs[key];
-      const statusInfo = getStatusInfo(item.currentStock, config);
-      return {
-        status: statusInfo.status,
-        label: statusInfo.label,
-        color: statusInfo.variant === 'destructive' ? 'destructive' : statusInfo.variant === 'secondary' ? 'secondary' : 'default',
+  const handleSaveProduct = async (productData: Omit<ProductoInventario, 'idx'>) => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      // Determinar si es nuevo o editar basado en editingProduct
+      // Si editingProduct existe, es editar
+      const isEditing = editingProduct !== null;
+      
+      const tipoOperacion = isEditing ? 'editar' : 'nuevo';
+      
+      // Obtener configuración de alertas para este producto si existe
+      const productKey = getProductKey(productData.tienda, productData.producto);
+      const alertConfig = alertConfigs[productKey];
+      
+      // Preparar payload para el endpoint
+      const payload = {
+        producto: productData.producto,
+        cantidad: productData.cantidad || 0,
+        tienda: productData.tienda,
+        stock_minimo: alertConfig?.stockMinimo ?? DEFAULT_MINIMUM_STOCK,
+        stock_maximo: alertConfig?.stockMaximo ?? DEFAULT_MAXIMUM_STOCK,
+        tipo_operacion: tipoOperacion,
+        usuario: user?.name || user?.email || 'asesor',
       };
+      
+      console.log('📤 [Asesor] Enviando producto al endpoint:', {
+        tipo_operacion: tipoOperacion,
+        producto: payload.producto,
+        es_edicion: isEditing,
+        editingProduct: editingProduct,
+      });
+      
+      // Llamar al endpoint
+      const response = await fetch('/api/inventory', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+      
+      const result = await response.json();
+      
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || result.message || 'Error al guardar el producto');
+      }
+      
+      console.log('✅ [Asesor] Producto guardado exitosamente:', result);
+      
+      // Cerrar el modal correspondiente y limpiar estados
+      if (editingProduct) {
+        setShowEditModal(false);
+        setEditingProduct(null);
+      } else {
+        setShowCreateModal(false);
+      }
+      
+      // Recargar datos después de guardar
+      await loadData();
+      
+    } catch (err) {
+      console.error('❌ [Asesor] Error al guardar producto:', err);
+      setError(err instanceof Error ? err.message : 'Error al guardar el producto');
+    } finally {
+      setLoading(false);
     }
-    if (item.currentStock === 0) return { status: 'out_of_stock', label: 'Agotado', color: 'destructive' };
-    if (item.currentStock <= item.minimumStock) return { status: 'low_stock', label: 'Stock Bajo', color: 'destructive' };
-    if (item.currentStock > item.maximumStock) return { status: 'overstock', label: 'Sobre Stock', color: 'secondary' };
-    return { status: 'in_stock', label: 'En Stock', color: 'default' };
   };
 
+  const handleDeleteProduct = (item: ProductoInventario) => {
+    setProductToDelete(item);
+    setShowDeleteModal(true);
+  };
 
-  const filteredItems = inventoryItems.filter((item) => {
-    const normalizedSearch = searchTerm.trim().toLowerCase();
-    const producto = inventoryItems.find(
-      (inv) => inv.product.name === item.product.name
-    ) ? {
-      producto: item.product.name,
-      cantidad: item.currentStock,
-      tienda: item.location || user?.company?.name || 'ALL STARS',
-    } as ProductoInventario : null;
+  const confirmDeleteProduct = async () => {
+    if (!productToDelete) return;
     
-    const matchesSearch =
-      normalizedSearch.length === 0 ||
-      item.product.name.toLowerCase().includes(normalizedSearch) ||
-      item.product.sku.toLowerCase().includes(normalizedSearch) ||
-      (item.location?.toLowerCase().includes(normalizedSearch) ?? false);
-    const stockStatus = getStockStatus(item, producto || undefined);
-    const matchesStock = stockFilter === 'all' || stockStatus.status === stockFilter;
-    return matchesSearch && matchesStock;
-  });
+    try {
+      setLoading(true);
+      setError(null);
+      
+      // Buscar el producto original en la base de datos para obtener el nombre exacto
+      // Esto asegura que usemos el nombre tal cual está almacenado en la BD
+      const productoOriginal = productosOriginales.find(
+        (p) => p.producto === productToDelete.producto && 
+               normalizeStoreName(p.tienda) === normalizeStoreName(productToDelete.tienda)
+      ) || productToDelete;
+      
+      // Usar el nombre exacto del producto original de la base de datos (sin trim para preservar espacios exactos)
+      const productoNombre = productoOriginal.producto || productToDelete.producto || '';
+      const tiendaNombre = productoOriginal.tienda || productToDelete.tienda || null;
+      
+      if (!productoNombre || productoNombre.trim().length === 0) {
+        throw new Error('El nombre del producto no puede estar vacío');
+      }
+      
+      // Log completo de información del producto antes de eliminar
+      console.log('🗑️ [Asesor] Información completa del producto a eliminar:', {
+        producto_nombre_enviado: productoNombre,
+        producto_nombre_original_bd: productoOriginal.producto,
+        producto_nombre_desde_ui: productToDelete.producto,
+        tienda: tiendaNombre,
+        cantidad: productToDelete.cantidad,
+        producto_completo: productToDelete,
+        producto_original_bd: productoOriginal,
+      });
+      
+      // Preparar payload según el formato del webhook
+      // El formato base requiere: producto, tipo_operacion, usuario
+      // Pero incluimos tienda por si el webhook la necesita para encontrar el producto exacto
+      const payload: any = {
+        producto: productoNombre,
+        tipo_operacion: 'eliminar',
+        usuario: user?.name || user?.email || 'admin',
+      };
+      
+      // Si hay tienda, incluirla puede ayudar al webhook a encontrar el producto
+      // aunque según la documentación solo se requieren los 3 campos básicos
+      if (tiendaNombre) {
+        payload.tienda = tiendaNombre;
+      }
+      
+      console.log('🗑️ [Asesor] Payload que se enviará al webhook:', JSON.stringify(payload, null, 2));
+      console.log('🗑️ [Asesor] Comparación de nombres:', {
+        nombre_en_ui: productToDelete.producto,
+        nombre_original_bd: productoOriginal.producto,
+        nombre_que_se_envia: productoNombre,
+        son_iguales: productToDelete.producto === productoOriginal.producto,
+      });
+      
+      // Llamar al endpoint
+      const response = await fetch('/api/inventory', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+      
+      const result = await response.json();
+      
+      // Log completo de la respuesta
+      console.log('📥 [Asesor] Respuesta completa del servidor:', {
+        status: response.status,
+        ok: response.ok,
+        result: result,
+      });
+      
+      if (!response.ok || !result.success) {
+        // Construir mensaje de error más detallado y amigable
+        let errorMessage = result.message || result.error || 'Error al eliminar el producto';
+        
+        // Log detallado del error
+        console.error('❌ [Asesor] Error completo del servidor:', {
+          status: response.status,
+          result: result,
+          details: result.details,
+          error_respuesta: result.error_respuesta,
+          payload_enviado: result.payload_enviado,
+        });
+        
+        // Si el error es "No item to return was found", mostrar mensaje más claro
+        if (result.details && typeof result.details === 'string' && result.details.includes('No item to return was found')) {
+          errorMessage = `El producto "${productoNombre}"${tiendaNombre ? ` en la tienda "${tiendaNombre}"` : ''} no se encontró en el inventario. Verifica que el nombre coincida exactamente (incluyendo mayúsculas, minúsculas y espacios). Revisa la consola para más detalles.`;
+        } else if (result.status && result.status !== 200) {
+          // Si hay un código de estado de error del webhook
+          errorMessage = `Error del servidor (${result.status}): ${errorMessage}. Revisa la consola para ver los detalles completos.`;
+        } else if (result.details) {
+          // Intentar parsear el JSON del details
+          try {
+            const detailsObj = typeof result.details === 'string' ? JSON.parse(result.details) : result.details;
+            if (detailsObj.message) {
+              errorMessage = detailsObj.message;
+            } else if (detailsObj.error) {
+              errorMessage = detailsObj.error;
+            }
+          } catch {
+            // Si no es JSON, usar el texto tal cual
+            if (typeof result.details === 'string' && result.details.length < 500) {
+              errorMessage = result.details;
+            }
+          }
+        }
+        
+        // Si hay información adicional del error en la respuesta
+        if (result.error_respuesta) {
+          console.error('❌ [Asesor] Error respuesta del webhook:', result.error_respuesta);
+        }
+        
+        throw new Error(errorMessage);
+      }
+      
+      console.log('✅ [Asesor] Producto eliminado exitosamente:', result);
+      
+      // Mostrar mensaje de éxito
+      toast({
+        title: '✅ Producto eliminado',
+        description: `El producto "${productoNombre}" ha sido eliminado exitosamente del inventario.`,
+        variant: 'default',
+      });
+      
+      // Eliminar configuración de alertas si existe
+      const productKey = getProductKey(productToDelete.tienda, productToDelete.producto);
+      if (alertConfigs[productKey]) {
+        const updatedConfigs = { ...alertConfigs };
+        delete updatedConfigs[productKey];
+        setAlertConfigs(updatedConfigs);
+        saveAlertConfig(productKey, {});
+      }
+      
+      // Cerrar modal y recargar datos
+      setShowDeleteModal(false);
+      setProductToDelete(null);
+      await loadData();
+      
+    } catch (err) {
+      console.error('❌ [Asesor] Error al eliminar producto:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Error al eliminar el producto';
+      setError(errorMessage);
+      toast({
+        title: '❌ Error al eliminar producto',
+        description: errorMessage,
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Función para agregar producto al diccionario
+  const handleAddToDictionary = async (producto: ProductoInventario) => {
+    const productName = producto.producto;
+    
+    // Verificar si ya se está agregando
+    if (addingToDictionary.has(productName)) {
+      return;
+    }
+    
+    try {
+      // Agregar al set de productos en proceso
+      setAddingToDictionary(prev => new Set(prev).add(productName));
+      
+      console.log('📚 [Asesor] Agregando producto al diccionario:', productName);
+      
+      // Llamar al endpoint de diccionario
+      const response = await fetch('/api/inventory/dictionary', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          producto_existente: productName,
+        }),
+      });
+      
+      const result = await response.json();
+      
+      if (!response.ok || !result.success) {
+        const errorMessage = result.message || result.error || 'Error al agregar el producto al diccionario';
+        console.error('❌ [Asesor] Error al agregar al diccionario:', result);
+        throw new Error(errorMessage);
+      }
+      
+      console.log('✅ [Asesor] Producto agregado al diccionario exitosamente:', result);
+      
+      toast({
+        title: '✅ Producto agregado al diccionario',
+        description: `"${productName}" ha sido agregado exitosamente al diccionario.`,
+        variant: 'default',
+      });
+      
+    } catch (err) {
+      console.error('❌ [Asesor] Error al agregar producto al diccionario:', err);
+      toast({
+        title: '❌ Error al agregar al diccionario',
+        description: err instanceof Error ? err.message : 'Ocurrió un error al agregar el producto al diccionario',
+        variant: 'destructive',
+      });
+    } finally {
+      // Remover del set de productos en proceso
+      setAddingToDictionary(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(productName);
+        return newSet;
+      });
+    }
+  };
+
 
   const totalUnits = useMemo(
     () => inventoryItems.reduce((sum, item) => sum + item.currentStock, 0),
     [inventoryItems]
   );
 
-  const inventoryStatusCounts = useMemo(() => {
-    const counts: Record<'all' | 'in_stock' | 'low_stock' | 'out_of_stock' | 'overstock', number> = {
+  const inventoryStatusCounts = useMemo<Record<'all' | StockStatus, number>>(() => {
+    const counts: Record<'all' | StockStatus, number> = {
       all: inventoryItems.length,
       in_stock: 0,
       low_stock: 0,
@@ -376,17 +649,26 @@ export default function AdvisorInventoryPage() {
     };
 
     inventoryItems.forEach((item) => {
-      const status = getStockStatus(item).status;
-      if (status !== 'in_stock' && status !== 'low_stock' && status !== 'out_of_stock' && status !== 'overstock') {
-        return;
-      }
-      counts[status] += 1;
+      const producto = inventoryItems.find(
+        (inv) => inv.product.name === item.product.name
+      ) ? {
+        producto: item.product.name,
+        cantidad: item.currentStock,
+        tienda: item.location || user?.company?.name || 'ALL STARS',
+      } as ProductoInventario : null;
+      
+      const key = producto ? getProductKey(producto.tienda, producto.producto) : null;
+      const config = key ? alertConfigs[key] : undefined;
+      const statusInfo = getStatusInfo(item.currentStock, config);
+      counts[statusInfo.status] += 1;
     });
 
     return counts;
-  }, [inventoryItems]);
+  }, [inventoryItems, alertConfigs, user]);
 
-  const stockFilterOptions = useMemo(
+  const stockFilterOptions = useMemo<
+    Array<{ value: StockFilterValue; label: string; count: number }>
+  >(
     () => [
       { value: 'all', label: 'Todos', count: inventoryStatusCounts.all },
       { value: 'in_stock', label: 'En stock', count: inventoryStatusCounts.in_stock },
@@ -397,10 +679,52 @@ export default function AdvisorInventoryPage() {
     [inventoryStatusCounts]
   );
 
-  if (loading) {
+  const filteredItems = useMemo(() => {
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+    const searchFiltered = inventoryItems.filter((item) => {
+      return (
+        normalizedSearch.length === 0 ||
+        item.product.name.toLowerCase().includes(normalizedSearch) ||
+        item.product.sku.toLowerCase().includes(normalizedSearch) ||
+        (item.location?.toLowerCase().includes(normalizedSearch) ?? false)
+      );
+    });
+
+    if (stockFilter === 'all') return searchFiltered;
+    
+    return searchFiltered.filter((item) => {
+      const producto = inventoryItems.find(
+        (inv) => inv.product.name === item.product.name
+      ) ? {
+        producto: item.product.name,
+        cantidad: item.currentStock,
+        tienda: item.location || user?.company?.name || 'ALL STARS',
+      } as ProductoInventario : null;
+      
+      const key = producto ? getProductKey(producto.tienda, producto.producto) : null;
+      const config = key ? alertConfigs[key] : undefined;
+      const statusInfo = getStatusInfo(item.currentStock, config);
+      return statusInfo.status === stockFilter;
+    });
+  }, [inventoryItems, searchTerm, stockFilter, alertConfigs, user]);
+
+  const sortedItems = useMemo(() => {
+    return [...filteredItems].sort((a, b) => {
+      return (a.product.name || '').localeCompare(b.product.name || '', 'es', { sensitivity: 'base' });
+    });
+  }, [filteredItems]);
+
+  const isInitialLoading = loading && inventoryItems.length === 0;
+  const isRefreshing = loading && inventoryItems.length > 0;
+
+  if (isInitialLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 animate-spin" />
+      <div className="flex flex-col items-center justify-center gap-3 py-12">
+        <div className="relative w-6 h-6">
+          <div className="absolute inset-0 rounded-full border-2 border-sky-200/30"></div>
+          <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-sky-500 border-r-indigo-500 border-b-purple-500 animate-spin"></div>
+        </div>
+        <span className="text-sm text-muted-foreground">Cargando inventario...</span>
       </div>
     );
   }
@@ -419,131 +743,225 @@ export default function AdvisorInventoryPage() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Inventario - {user.company?.name}</h1>
-          <p className="text-muted-foreground">
-            Gestiona el inventario de tu empresa
-          </p>
-        </div>
-        <Button asChild>
-          <Link href="/dashboard/asesor/orders">
-            <Package className="w-4 h-4 mr-2" />
-            Ver Pedidos
-          </Link>
-        </Button>
-      </div>
-
-      {/* Company Info */}
-      <Card className="border-blue-200 bg-blue-50">
-        <CardContent className="p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center">
-              <Package className="w-5 h-5 text-white" />
+    <div className="space-y-8">
+      {/* Header mejorado con gradiente */}
+      <div className="relative rounded-2xl bg-gradient-to-r from-sky-500 via-indigo-500 to-purple-500 p-8 text-white overflow-hidden">
+        <div className="absolute inset-0 opacity-20"></div>
+        <div className="relative flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+          <div className="flex items-center gap-4">
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/20 backdrop-blur-sm shadow-lg">
+              <Warehouse className="h-8 w-8 text-white" />
             </div>
             <div>
-              <h3 className="font-semibold text-blue-900">{user.company?.name}</h3>
-              <p className="text-sm text-blue-700">
-                Inventario exclusivo de tu empresa • {inventoryItems.length} productos
+              <p className="inline-flex items-center gap-2 rounded-full bg-white/20 backdrop-blur-sm px-4 py-1.5 text-sm font-medium text-white mb-3">
+                <Package className="h-4 w-4" />
+                Panel de gestión de inventario
+              </p>
+              <h1 className="text-4xl font-bold tracking-tight text-white mb-2">
+                Inventario - {user.company?.name}
+              </h1>
+              <p className="text-white/90 text-base">
+                Gestiona el inventario de tu empresa
               </p>
             </div>
           </div>
-        </CardContent>
-      </Card>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button 
+              onClick={loadData} 
+              disabled={loading}
+              className="flex items-center gap-2 bg-white/10 backdrop-blur-sm border-white/20 text-white hover:bg-white/20 transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+              variant="outline"
+            >
+              <RefreshCw className={cn('w-4 h-4', loading ? 'animate-spin' : '')} />
+              <span>Recargar</span>
+            </Button>
+            <Button asChild className="bg-white/10 backdrop-blur-sm border-white/20 text-white hover:bg-white/20">
+              <Link href="/dashboard/asesor/orders">
+                <Package className="w-4 h-4 mr-2" />
+                Ver Pedidos
+              </Link>
+            </Button>
+          </div>
+        </div>
+      </div>
 
-      {/* Stats */}
+      {error && (
+        <Alert variant="destructive">
+          <AlertDescription className="flex items-center justify-between">
+            <span>{error}</span>
+            <Button size="sm" variant="outline" onClick={loadData} disabled={loading}>
+              Reintentar
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Cards de Estadísticas - Mejoradas */}
       {stats && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <StatsCard
-            title="Total Productos"
-            value={stats.totalProducts}
-            icon={Package}
-            className="bg-blue-50 border-blue-200"
-          />
-          <StatsCard
-            title="Unidades Totales"
-            value={totalUnits.toLocaleString('es-CR')}
-            icon={TrendingUp}
-            className="bg-green-50 border-green-200"
-          />
-          <StatsCard
-            title="Stock Bajo"
-            value={stats.lowStockItems}
-            icon={AlertTriangle}
-            className="bg-yellow-50 border-yellow-200"
-          />
-          <StatsCard
-            title="Agotados"
-            value={stats.outOfStockItems}
-            icon={XCircle}
-            className="bg-red-50 border-red-200"
-          />
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <Card className="relative overflow-hidden hover:shadow-lg transition-all duration-200 border-2 border-sky-200 dark:border-sky-800">
+            <div className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full bg-gradient-to-br from-sky-400/30 to-blue-400/30 blur-xl" />
+            <CardContent className="relative p-5">
+              <div className="flex items-center justify-between">
+                <div className="flex-1">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Productos listados</p>
+                  <p className="text-3xl font-bold text-sky-700 dark:text-sky-400">{stats.totalProducts.toLocaleString()}</p>
+                  <p className="text-xs text-muted-foreground mt-1">Total de productos</p>
+                </div>
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-sky-500 to-blue-500 text-white shadow-lg">
+                  <Package className="w-6 h-6" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="relative overflow-hidden hover:shadow-lg transition-all duration-200 border-2 border-emerald-200 dark:border-emerald-800">
+            <div className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full bg-gradient-to-br from-emerald-400/30 to-green-400/30 blur-xl" />
+            <CardContent className="relative p-5">
+              <div className="flex items-center justify-between">
+                <div className="flex-1">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Unidades totales</p>
+                  <p className="text-3xl font-bold text-emerald-700 dark:text-emerald-400">{totalUnits.toLocaleString('es-CR')}</p>
+                  <p className="text-xs text-muted-foreground mt-1">Stock disponible</p>
+                </div>
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-green-500 text-white shadow-lg">
+                  <TrendingUp className="w-6 h-6" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="relative overflow-hidden hover:shadow-lg transition-all duration-200 border-2 border-amber-200 dark:border-amber-800">
+            <div className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full bg-gradient-to-br from-amber-400/30 to-yellow-400/30 blur-xl" />
+            <CardContent className="relative p-5">
+              <div className="flex items-center justify-between">
+                <div className="flex-1">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Stock bajo</p>
+                  <p className="text-3xl font-bold text-amber-700 dark:text-amber-400">{stats.lowStockItems}</p>
+                  <p className="text-xs text-muted-foreground mt-1">Productos con bajo stock</p>
+                </div>
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-amber-500 to-yellow-500 text-white shadow-lg">
+                  <AlertTriangle className="w-6 h-6" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="relative overflow-hidden hover:shadow-lg transition-all duration-200 border-2 border-red-200 dark:border-red-800">
+            <div className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full bg-gradient-to-br from-red-400/30 to-rose-400/30 blur-xl" />
+            <CardContent className="relative p-5">
+              <div className="flex items-center justify-between">
+                <div className="flex-1">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Agotados</p>
+                  <p className="text-3xl font-bold text-red-700 dark:text-red-400">{stats.outOfStockItems}</p>
+                  <p className="text-xs text-muted-foreground mt-1">Sin stock disponible</p>
+                </div>
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-red-500 to-rose-500 text-white shadow-lg">
+                  <XCircle className="w-6 h-6" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       )}
+
+      {/* Sección de Filtros - Mejorada */}
+      <div className="relative group">
+        <div className="absolute -inset-0.5 bg-gradient-to-r from-sky-400 to-indigo-400 rounded-2xl opacity-10 group-hover:opacity-20 blur transition duration-300"></div>
+        <Card className="relative border-0 shadow-lg bg-gradient-to-br from-sky-50/50 to-indigo-50/50 dark:from-sky-950/50 dark:to-indigo-950/50">
+          <CardHeader className="pb-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-sky-500 to-indigo-500 text-white shadow-md">
+                  <Filter className="w-5 h-5" />
+                </div>
+                <div>
+                  <CardTitle className="text-lg font-semibold">Filtros y Búsqueda</CardTitle>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Filtra inventario por estado de stock o búsqueda de texto
+                  </p>
+                </div>
+              </div>
+              <Badge variant="secondary" className="text-sm px-3 py-1">
+                {sortedItems.length} resultado{sortedItems.length === 1 ? '' : 's'}
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Filtros de estado */}
+            <div className="space-y-3">
+              <Label className="text-sm font-medium flex items-center gap-2">
+                <Package className="h-4 w-4 text-sky-500" />
+                Estado de Stock
+              </Label>
+              <div className="flex flex-wrap items-center gap-2">
+                {stockFilterOptions.map((option) => {
+                  const isActive = stockFilter === option.value;
+                  return (
+                    <Button
+                      key={option.value}
+                      size="sm"
+                      variant={isActive ? 'default' : 'outline'}
+                      onClick={() => setStockFilter(option.value)}
+                      className={cn(
+                        'transition-all duration-200 hover:scale-105',
+                        isActive
+                          ? 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-md'
+                          : 'hover:bg-emerald-50'
+                      )}
+                    >
+                      <span>{option.label}</span>
+                      <span className="ml-2 px-2 py-0.5 rounded-full bg-white/20 text-xs font-semibold">
+                        {option.count}
+                      </span>
+                    </Button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="relative w-full">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Buscar por producto o tienda..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="h-9 rounded-full border-slate-200 pl-9"
+              />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
       <Tabs defaultValue="inventory" className="space-y-4">
         <TabsList>
           <TabsTrigger value="inventory">Inventario</TabsTrigger>
-          <TabsTrigger value="transactions">Movimientos</TabsTrigger>
+          <TabsTrigger value="movements">Movimientos</TabsTrigger>
         </TabsList>
 
-        {/* Inventory Tab */}
         <TabsContent value="inventory" className="space-y-4">
           <Card>
-            <CardHeader className="space-y-4">
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                <div className="flex flex-wrap gap-2">
-                  {stockFilterOptions.map((option) => {
-                    const isActive = stockFilter === option.value;
-                    return (
-                      <Button
-                        key={option.value}
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setStockFilter(option.value)}
-                        className={cn(
-                          'flex items-center gap-2 rounded-full border px-3 py-1 text-sm font-medium transition-colors',
-                          isActive
-                            ? 'border-indigo-500 bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
-                            : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
-                        )}
-                      >
-                        <span>{option.label}</span>
-                        <span
-                          className={cn(
-                            'min-w-[1.75rem] rounded-full px-2 py-0.5 text-xs font-semibold',
-                            isActive ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-600'
-                          )}
-                        >
-                          {option.count}
-                        </span>
-                      </Button>
-                    );
-                  })}
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <div className="relative w-full lg:w-72">
-                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                    <Input
-                      placeholder="Buscar por producto o tienda..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="h-9 rounded-full border-slate-200 pl-9"
-                    />
+            <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <CardTitle>
+                Inventario detallado ({sortedItems.length}
+                {stockFilter === 'all' ? '' : ` • ${stockFilterOptions.find((o) => o.value === stockFilter)?.label ?? ''}`}
+                )
+              </CardTitle>
+              <div className="flex items-center gap-2">
+                {isRefreshing && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Actualizando inventario...
                   </div>
-                  <Button variant="outline" size="sm" onClick={handleCreateProduct}>
-                    <Plus className="mr-2 h-4 w-4" />
-                    Nuevo Producto
-                  </Button>
-                </div>
+                )}
+                <Button variant="outline" size="sm" onClick={handleCreateProduct}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Nuevo Producto
+                </Button>
               </div>
             </CardHeader>
             <CardContent>
-              {filteredItems.length === 0 ? (
+              {sortedItems.length === 0 ? (
                 <Alert>
                   <AlertDescription>
                     No se encontraron productos que coincidan con los filtros seleccionados.
@@ -557,12 +975,11 @@ export default function AdvisorInventoryPage() {
                         <TableHead>Producto</TableHead>
                         <TableHead className="w-[120px] text-right">Unidades</TableHead>
                         <TableHead className="w-[140px] text-center">Estado</TableHead>
-                        <TableHead className="w-[120px] text-center">Acciones</TableHead>
+                        <TableHead className="w-[80px] text-center">Acciones</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredItems.map((item) => {
-                        // Encontrar el producto correspondiente
+                      {sortedItems.map((item) => {
                         const producto = inventoryItems.find(
                           (inv) => inv.product.name === item.product.name
                         ) ? {
@@ -571,7 +988,10 @@ export default function AdvisorInventoryPage() {
                           tienda: item.location || user?.company?.name || 'ALL STARS',
                         } as ProductoInventario : null;
                         
-                        const stockStatus = getStockStatus(item, producto || undefined);
+                        const key = producto ? getProductKey(producto.tienda, producto.producto) : null;
+                        const config = key ? alertConfigs[key] : undefined;
+                        const statusInfo = getStatusInfo(item.currentStock, config);
+                        
                         return (
                           <TableRow key={item.id}>
                             <TableCell>
@@ -588,13 +1008,25 @@ export default function AdvisorInventoryPage() {
                               {item.currentStock}
                             </TableCell>
                             <TableCell className="text-center">
-                              <Badge variant={stockStatus.color as any}>
-                                {stockStatus.label}
-                              </Badge>
+                              <Badge variant={statusInfo.variant}>{statusInfo.label}</Badge>
                             </TableCell>
                             <TableCell className="text-center">
                               {producto && (
                                 <div className="flex items-center justify-center gap-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleAddToDictionary(producto)}
+                                    className="h-8 w-8 p-0"
+                                    title="Agregar al diccionario"
+                                    disabled={addingToDictionary.has(producto.producto)}
+                                  >
+                                    {addingToDictionary.has(producto.producto) ? (
+                                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                                    ) : (
+                                      <BookOpen className="h-4 w-4 text-muted-foreground hover:text-blue-600" />
+                                    )}
+                                  </Button>
                                   <Button
                                     variant="ghost"
                                     size="sm"
@@ -613,6 +1045,15 @@ export default function AdvisorInventoryPage() {
                                   >
                                     <Edit className="h-4 w-4 text-muted-foreground hover:text-primary" />
                                   </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleDeleteProduct(producto)}
+                                    className="h-8 w-8 p-0"
+                                    title="Eliminar producto"
+                                  >
+                                    <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />
+                                  </Button>
                                 </div>
                               )}
                             </TableCell>
@@ -627,8 +1068,7 @@ export default function AdvisorInventoryPage() {
           </Card>
         </TabsContent>
 
-        {/* Transactions Tab */}
-        <TabsContent value="transactions" className="space-y-4">
+        <TabsContent value="movements" className="space-y-4">
           <InventoryMovements 
             productos={inventoryItems.map((item) => ({
               producto: item.product.name,
@@ -727,13 +1167,17 @@ export default function AdvisorInventoryPage() {
                     id="stock-maximo"
                     type="number"
                     min="1"
+                    max="100"
                     value={alertConfig.stockMaximo ?? DEFAULT_MAXIMUM_STOCK}
-                    onChange={(e) =>
+                    onChange={(e) => {
+                      const value = e.target.value ? parseInt(e.target.value, 10) : undefined;
+                      // Limitar a 100 como máximo
+                      const limitedValue = value && value > 100 ? 100 : value;
                       setAlertConfig({
                         ...alertConfig,
-                        stockMaximo: e.target.value ? parseInt(e.target.value, 10) : undefined,
-                      })
-                    }
+                        stockMaximo: limitedValue,
+                      });
+                    }}
                     placeholder={DEFAULT_MAXIMUM_STOCK.toString()}
                     className="h-9 text-sm font-medium"
                   />
@@ -794,16 +1238,103 @@ export default function AdvisorInventoryPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Modal de Crear/Editar Producto */}
-      <ProductFormModal
-        open={showProductModal}
-        onOpenChange={setShowProductModal}
-        product={editingProduct}
+      {/* Modal de Crear Producto */}
+      <CreateProductModal
+        open={showCreateModal}
+        onOpenChange={setShowCreateModal}
         onSave={handleSaveProduct}
         stores={[user?.company?.name || 'ALL STARS']}
         hideStoreField={true}
         defaultStore={user?.company?.name || 'ALL STARS'}
       />
+
+      {/* Modal de Editar Producto */}
+      {editingProduct && (
+        <EditProductModal
+          open={showEditModal}
+          onOpenChange={(open) => {
+            setShowEditModal(open);
+            if (!open) {
+              setEditingProduct(null);
+            }
+          }}
+          product={editingProduct}
+          onSave={handleSaveProduct}
+          stores={[user?.company?.name || 'ALL STARS']}
+          hideStoreField={true}
+          defaultStore={user?.company?.name || 'ALL STARS'}
+        />
+      )}
+
+      {/* Modal de Confirmación de Eliminación */}
+      <Dialog open={showDeleteModal} onOpenChange={setShowDeleteModal}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Trash2 className="h-5 w-5 text-destructive" />
+              Confirmar Eliminación
+            </DialogTitle>
+            <DialogDescription>
+              ¿Estás seguro de que deseas eliminar este producto del inventario?
+            </DialogDescription>
+          </DialogHeader>
+          {productToDelete && (
+            <div className="py-4">
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                <div className="space-y-2">
+                  <div>
+                    <span className="text-sm font-medium text-slate-600">Producto:</span>
+                    <p className="text-base font-semibold text-slate-900">{productToDelete.producto}</p>
+                  </div>
+                  <div>
+                    <span className="text-sm font-medium text-slate-600">Tienda:</span>
+                    <p className="text-base text-slate-700">{normalizeStoreName(productToDelete.tienda)}</p>
+                  </div>
+                  <div>
+                    <span className="text-sm font-medium text-slate-600">Cantidad actual:</span>
+                    <p className="text-base text-slate-700">{productToDelete.cantidad} unidades</p>
+                  </div>
+                </div>
+              </div>
+              <Alert className="mt-4 border-orange-200 bg-orange-50">
+                <AlertTriangle className="h-4 w-4 text-orange-600" />
+                <AlertDescription className="text-orange-800 text-sm">
+                  Esta acción no se puede deshacer. El producto será eliminado permanentemente del inventario.
+                </AlertDescription>
+              </Alert>
+            </div>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowDeleteModal(false);
+                setProductToDelete(null);
+              }}
+              disabled={loading}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={confirmDeleteProduct}
+              disabled={loading}
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Eliminando...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Eliminar
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

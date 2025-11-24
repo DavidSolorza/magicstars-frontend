@@ -15,7 +15,10 @@ export default function Home() {
         console.log('Usuario logueado:', user);
         
         // Redirección específica por rol
-        if (user.role === 'mensajero') {
+        if (user.role === 'admin' || user.role === 'master') {
+          console.log('Redirigiendo admin/master a dashboard admin');
+          router.push('/dashboard/admin');
+        } else if (user.role === 'mensajero' || user.role === 'mensajero-extra') {
           console.log('Redirigiendo mensajero a Mi Ruta Hoy');
           router.push('/dashboard/mensajero/mi-ruta-hoy');
         } else if (user.role === 'mensajero-lider') {

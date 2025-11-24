@@ -404,9 +404,12 @@ export default function TiendaOrdersPage() {
 
   if (loading && pedidos.length === 0) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 animate-spin" />
-        <span className="ml-2 text-gray-600">Cargando pedidos...</span>
+      <div className="flex flex-col items-center justify-center gap-3 py-12">
+        <div className="relative w-6 h-6">
+          <div className="absolute inset-0 rounded-full border-2 border-sky-200/30"></div>
+          <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-sky-500 border-r-indigo-500 border-b-purple-500 animate-spin"></div>
+        </div>
+        <span className="text-sm text-muted-foreground">Cargando pedidos...</span>
       </div>
     );
   }
@@ -532,12 +535,13 @@ export default function TiendaOrdersPage() {
 
       {/* Filtros de Pedidos */}
       <PedidosFilters
-        filters={filters}
+        filters={{ ...filters, searchQuery: filters.searchTerm }}
         filterOptions={filterOptions}
         stats={stats}
         onFilterChange={updateFilters}
         onClearFilters={clearAllFilters}
         hasActiveFilters={hasActiveFilters}
+        onExecuteSearch={loadPedidos}
       />
 
       {/* Tabla de Pedidos - Estilo Mensajeros */}
