@@ -96,6 +96,56 @@ export const obtenerTodosProductosALLSTARS = async (): Promise<ProductoInventari
   return obtenerInventarioPorTienda('ALL STARS');
 };
 
+// Función para actualizar el nombre de un producto directamente en Supabase
+export const actualizarNombreProducto = async (
+  nombreOriginal: string,
+  nombreNuevo: string,
+  tienda: string
+): Promise<boolean> => {
+  try {
+    console.log('📝 [Supabase] Actualizando nombre de producto:', {
+      nombre_original: nombreOriginal,
+      nombre_nuevo: nombreNuevo,
+      tienda: tienda,
+    });
+
+    // Buscar el producto por nombre original y tienda
+    const { data: productos, error: searchError } = await supabaseInventario
+      .from('Inventario')
+      .select('*')
+      .ilike('producto', nombreOriginal.trim())
+      .ilike('tienda', tienda.trim());
+
+    if (searchError) {
+      console.error('❌ [Supabase] Error al buscar producto:', searchError);
+      throw new Error(`Error al buscar producto: ${searchError.message}`);
+    }
+
+    if (!productos || productos.length === 0) {
+      console.error('❌ [Supabase] Producto no encontrado:', { nombreOriginal, tienda });
+      throw new Error(`Producto "${nombreOriginal}" no encontrado en la tienda "${tienda}"`);
+    }
+
+    // Actualizar el nombre del producto
+    const { error: updateError } = await supabaseInventario
+      .from('Inventario')
+      .update({ producto: nombreNuevo.trim() })
+      .ilike('producto', nombreOriginal.trim())
+      .ilike('tienda', tienda.trim());
+
+    if (updateError) {
+      console.error('❌ [Supabase] Error al actualizar nombre del producto:', updateError);
+      throw new Error(`Error al actualizar nombre: ${updateError.message}`);
+    }
+
+    console.log('✅ [Supabase] Nombre del producto actualizado exitosamente');
+    return true;
+  } catch (error) {
+    console.error('❌ [Supabase] Error en actualizarNombreProducto:', error);
+    throw error;
+  }
+};
+
 // Interfaz para movimientos de inventario_control
 export interface MovimientoInventario {
   [key: string]: any; // Para permitir cualquier campo de la tabla
