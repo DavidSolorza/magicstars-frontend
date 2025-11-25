@@ -84,51 +84,103 @@ const STORAGE_KEY = 'product_mappings';
 const COMBOS_STORAGE_KEY = 'product_combos';
 
 // Función para parsear productos de un string
-const parseProductosString = (productosStr: string | undefined): Array<{ name: string; quantity?: number }> => {
+// Los productos entre paréntesis son considerados "no encontrados"
+// Ejemplo: "1X GEL PYTHON, (1 X EVIL GOODS! | SEBO DE RES | NUTRICIÓN INTENSA)"
+// - "1X GEL PYTHON" es un producto encontrado
+// - "(1 X EVIL GOODS! | SEBO DE RES | NUTRICIÓN INTENSA)" es un producto no encontrado
+const parseProductosString = (productosStr: string | undefined): Array<{ name: string; quantity?: number; isUnmapped?: boolean }> => {
   if (!productosStr) return [];
   
-  const products: Array<{ name: string; quantity?: number }> = [];
+  const products: Array<{ name: string; quantity?: number; isUnmapped?: boolean }> = [];
   
-  // Intentar diferentes formatos
-  // Formato: "Producto1 x2, Producto2 x3"
-  const withQuantities = productosStr.match(/([^,]+?)\s*x\s*(\d+)/gi);
-  if (withQuantities) {
-    withQuantities.forEach(match => {
-      const parts = match.match(/(.+?)\s*x\s*(\d+)/i);
-      if (parts) {
-        products.push({
-          name: parts[1].trim(),
-          quantity: parseInt(parts[2], 10),
-        });
-      }
+  // Primero, extraer todos los productos entre paréntesis (no encontrados)
+  // Guardamos tanto el match completo (con paréntesis) como el contenido (sin paréntesis)
+  const unmappedPattern = /(\([^)]+\))/g;
+  const unmappedMatches: Array<{ full: string; content: string }> = [];
+  let match;
+  
+  while ((match = unmappedPattern.exec(productosStr)) !== null) {
+    unmappedMatches.push({
+      full: match[1], // Con paréntesis: "(1 X EVIL GOODS! | SEBO DE RES | NUTRICIÓN INTENSA)"
+      content: match[1].slice(1, -1).trim() // Sin paréntesis: "1 X EVIL GOODS! | SEBO DE RES | NUTRICIÓN INTENSA"
     });
   }
   
-  // Si no hay matches con cantidades, dividir por comas
-  if (products.length === 0) {
-    productosStr.split(',').forEach(part => {
-      const trimmed = part.trim();
-      if (trimmed) {
-        // Intentar extraer cantidad si existe
-        const qtyMatch = trimmed.match(/(.+?)\s*x\s*(\d+)/i);
-        if (qtyMatch) {
-          products.push({
-            name: qtyMatch[1].trim(),
-            quantity: parseInt(qtyMatch[2], 10),
-          });
-        } else {
-          products.push({ name: trimmed });
-        }
+  // Remover los productos entre paréntesis del string para procesar los encontrados
+  let productosSinParentesis = productosStr.replace(/\([^)]+\)/g, '').trim();
+  
+  // Procesar productos no encontrados (entre paréntesis)
+  unmappedMatches.forEach(({ full, content }) => {
+    const trimmed = content.trim();
+    if (trimmed) {
+      // Intentar extraer cantidad si existe (ej: "1 X EVIL GOODS!")
+      const qtyMatch = trimmed.match(/^(\d+)\s*[xX]\s*(.+)$/i);
+      if (qtyMatch) {
+        // Guardar el nombre completo con paréntesis para mostrarlo
+        const nameWithParentheses = `(${trimmed})`;
+        products.push({
+          name: nameWithParentheses, // Guardamos con paréntesis para mostrarlo
+          quantity: parseInt(qtyMatch[1], 10),
+          isUnmapped: true,
+        });
+      } else {
+        // Guardar el nombre completo con paréntesis
+        const nameWithParentheses = `(${trimmed})`;
+        products.push({
+          name: nameWithParentheses, // Guardamos con paréntesis para mostrarlo
+          isUnmapped: true,
+        });
       }
-    });
+    }
+  });
+  
+  // Procesar productos encontrados (sin paréntesis)
+  if (productosSinParentesis) {
+    // Limpiar comas múltiples y espacios
+    productosSinParentesis = productosSinParentesis.replace(/,\s*,/g, ',').trim();
+    
+    if (productosSinParentesis) {
+      // Dividir por comas
+      productosSinParentesis.split(',').forEach(part => {
+        const trimmed = part.trim();
+        if (trimmed) {
+          // Intentar extraer cantidad si existe (ej: "1X GEL PYTHON" o "2 X PRODUCTO")
+          const qtyMatch = trimmed.match(/^(\d+)\s*[xX]\s*(.+)$/i);
+          if (qtyMatch) {
+            products.push({
+              name: qtyMatch[2].trim(),
+              quantity: parseInt(qtyMatch[1], 10),
+              isUnmapped: false,
+            });
+          } else {
+            products.push({
+              name: trimmed,
+              isUnmapped: false,
+            });
+          }
+        }
+      });
+    }
   }
   
   return products;
 };
 
+// Función para extraer el contenido sin paréntesis de un nombre
+// Ejemplo: "(1 X EVIL GOODS!)" -> "1 X EVIL GOODS!"
+const extractNameWithoutParentheses = (name: string): string => {
+  if (name.startsWith('(') && name.endsWith(')')) {
+    return name.slice(1, -1).trim();
+  }
+  return name;
+};
+
 // Función para normalizar nombres de productos
+// Si el nombre tiene paréntesis, los removemos para la normalización
 const normalizeProductName = (name: string): string => {
-  return name
+  // Remover paréntesis si existen para normalización
+  const nameWithoutParens = extractNameWithoutParentheses(name);
+  return nameWithoutParens
     .toLowerCase()
     .trim()
     .replace(/\s+/g, ' ')
@@ -282,6 +334,7 @@ export function UnmappedProductsManager({
   }, []);
 
   // Detectar productos no encontrados
+  // Ahora solo consideramos como "no encontrados" los productos que vienen entre paréntesis en el campo productos
   useEffect(() => {
     const inventoryNames = new Set(
       inventory.map(p => normalizeProductName(p.producto || ''))
@@ -294,34 +347,39 @@ export function UnmappedProductsManager({
       
       const parsedProducts = parseProductosString(order.productos);
       
-      parsedProducts.forEach(({ name }) => {
-        const normalized = normalizeProductName(name);
-        
-        // Verificar si está en inventario o tiene mapeo (incluyendo combos)
-        const hasMapping = savedMappings[normalized];
-        
-        if (!inventoryNames.has(normalized) && !hasMapping) {
-          const existing = unmappedMap.get(normalized);
-          if (existing) {
-            existing.occurrences += 1;
-            if (!existing.orderIds.includes(order.id)) {
-              existing.orderIds.push(order.id);
+      // Solo procesar productos marcados como no encontrados (isUnmapped: true)
+      // Estos son los que vienen entre paréntesis en el string de productos
+      parsedProducts
+        .filter(product => product.isUnmapped === true)
+        .forEach(({ name }) => {
+          const normalized = normalizeProductName(name);
+          
+          // Verificar si tiene mapeo guardado (incluyendo combos)
+          // Si ya tiene mapeo, no lo mostramos como no encontrado
+          const hasMapping = savedMappings[normalized];
+          
+          if (!hasMapping) {
+            const existing = unmappedMap.get(normalized);
+            if (existing) {
+              existing.occurrences += 1;
+              if (!existing.orderIds.includes(order.id)) {
+                existing.orderIds.push(order.id);
+              }
+              // Actualizar última vez visto
+              if (new Date(order.createdAt) > new Date(existing.lastSeen)) {
+                existing.lastSeen = order.createdAt;
+              }
+            } else {
+              unmappedMap.set(normalized, {
+                id: `unmapped-${normalized}`,
+                name,
+                orderIds: [order.id],
+                occurrences: 1,
+                lastSeen: order.createdAt,
+              });
             }
-            // Actualizar última vez visto
-            if (new Date(order.createdAt) > new Date(existing.lastSeen)) {
-              existing.lastSeen = order.createdAt;
-            }
-          } else {
-            unmappedMap.set(normalized, {
-              id: `unmapped-${normalized}`,
-              name,
-              orderIds: [order.id],
-              occurrences: 1,
-              lastSeen: order.createdAt,
-            });
           }
-        }
-      });
+        });
     });
 
     const unmappedList = Array.from(unmappedMap.values())
@@ -337,9 +395,11 @@ export function UnmappedProductsManager({
     const existingMapping = savedMappings[normalized];
     const existingMappingFull = savedMappingsWithQuantity[normalized];
     
-    // Intentar extraer cantidad del nombre del producto (ej: "2 X TURKESTERONE")
+    // Intentar extraer cantidad del nombre del producto (sin paréntesis)
+    // Ejemplo: "(2 X TURKESTERONE)" -> "2 X TURKESTERONE" -> cantidad: 2
     let extractedQuantity = 1;
-    const quantityMatch = unmapped.name.match(/(\d+)\s*x\s*/i);
+    const nameWithoutParens = extractNameWithoutParentheses(unmapped.name);
+    const quantityMatch = nameWithoutParens.match(/^(\d+)\s*[xX]\s*/i);
     if (quantityMatch) {
       extractedQuantity = parseInt(quantityMatch[1], 10) || 1;
     }
