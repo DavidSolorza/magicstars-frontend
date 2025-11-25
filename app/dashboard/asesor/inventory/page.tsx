@@ -31,7 +31,6 @@ import {
   Trash2,
   Filter,
   Warehouse,
-  BookOpen,
 } from 'lucide-react';
 import { Loader2 } from 'lucide-react';
 import Link from 'next/link';
@@ -143,9 +142,6 @@ export default function AdvisorInventoryPage() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [productToDelete, setProductToDelete] = useState<ProductoInventario | null>(null);
   
-  // Estado para productos agregando al diccionario
-  const [addingToDictionary, setAddingToDictionary] = useState<Set<string>>(new Set());
-
   const resolveCompanyInfo = (): Company => {
     const now = new Date().toISOString();
 
@@ -353,21 +349,51 @@ export default function AdvisorInventoryPage() {
       const isEditing = editingProduct !== null;
       const tipoOperacion = isEditing ? 'editar' : 'nuevo';
       
-      // Obtener configuración de alertas para este producto si existe (como fallback)
-      const productKey = getProductKey(productData.tienda, productData.producto);
-      const alertConfig = alertConfigs[productKey];
-      
       // Preparar payload exactamente como lo requiere el webhook
       // Formato: producto, cantidad, tienda, stock_minimo, stock_maximo, tipo_operacion, usuario
+      // IMPORTANTE: Enviar TODOS los campos tal como vienen del formulario
+      // El webhook debe tener lógica para encontrar el producto cuando es edición
       const payload = {
-        producto: productData.producto.trim(),
+        producto: productData.producto.trim(), // Nombre tal como viene del formulario
         cantidad: productData.cantidad || 0,
         tienda: productData.tienda.trim(),
-        stock_minimo: productData.stock_minimo ?? alertConfig?.stockMinimo ?? DEFAULT_MINIMUM_STOCK,
-        stock_maximo: productData.stock_maximo ?? alertConfig?.stockMaximo ?? DEFAULT_MAXIMUM_STOCK,
+        stock_minimo: productData.stock_minimo ?? DEFAULT_MINIMUM_STOCK,
+        stock_maximo: productData.stock_maximo ?? DEFAULT_MAXIMUM_STOCK,
         tipo_operacion: tipoOperacion,
         usuario: user?.name || user?.email || 'asesor',
       };
+      
+      // Log detallado antes de enviar
+      console.log('═══════════════════════════════════════════════════════════');
+      console.log('📤 [Asesor] PREPARANDO PAYLOAD PARA ENVIAR');
+      console.log('═══════════════════════════════════════════════════════════');
+      console.log('📋 Tipo de operación:', tipoOperacion);
+      console.log('✏️  Es edición:', isEditing);
+      if (isEditing) {
+        console.log('📝 Nombre ORIGINAL (de BD):', editingProduct?.producto);
+        console.log('📝 Nombre NUEVO (del formulario):', productData.producto);
+        console.log('🔄 ¿Nombre cambió?:', editingProduct?.producto !== productData.producto);
+      }
+      console.log('📦 Producto en payload:', payload.producto);
+      console.log('🏪 Tienda:', payload.tienda);
+      console.log('📊 Cantidad:', payload.cantidad);
+      console.log('📉 Stock mínimo:', payload.stock_minimo);
+      console.log('📈 Stock máximo:', payload.stock_maximo);
+      console.log('👤 Usuario:', payload.usuario);
+      console.log('───────────────────────────────────────────────────────────');
+      console.log('📄 Payload JSON completo:');
+      console.log(JSON.stringify(payload, null, 2));
+      console.log('═══════════════════════════════════════════════════════════');
+      
+      // Log para debugging
+      if (isEditing) {
+        console.log('📝 [Asesor] Editando producto:', {
+          nombre_original: editingProduct?.producto,
+          nombre_nuevo: productData.producto,
+          nombre_cambio: editingProduct?.producto !== productData.producto,
+          producto_en_payload: payload.producto,
+        });
+      }
       
       console.log('📤 [Asesor] Enviando producto al endpoint:', {
         tipo_operacion: tipoOperacion,
@@ -388,7 +414,41 @@ export default function AdvisorInventoryPage() {
       const result = await response.json();
       
       if (!response.ok || !result.success) {
-        throw new Error(result.error || result.message || 'Error al guardar el producto');
+        // Mostrar error más detallado y claro
+        const errorMessage = result.message || result.error || result.details || 'Error al guardar el producto';
+        
+        console.error('═══════════════════════════════════════════════════════════');
+        console.error('❌ [Asesor] ERROR AL GUARDAR PRODUCTO');
+        console.error('═══════════════════════════════════════════════════════════');
+        console.error('📋 Tipo de operación:', tipoOperacion);
+        console.error('📦 Producto:', payload.producto);
+        console.error('🏪 Tienda:', payload.tienda);
+        console.error('📊 Cantidad:', payload.cantidad);
+        console.error('📉 Stock mínimo:', payload.stock_minimo);
+        console.error('📈 Stock máximo:', payload.stock_maximo);
+        console.error('👤 Usuario:', payload.usuario);
+        console.error('───────────────────────────────────────────────────────────');
+        console.error('📤 Payload completo enviado:', JSON.stringify(payload, null, 2));
+        console.error('───────────────────────────────────────────────────────────');
+        console.error('📥 Respuesta del servidor:');
+        console.error('   Status:', response.status);
+        console.error('   Success:', result.success);
+        console.error('   Error:', result.error);
+        console.error('   Message:', result.message);
+        if (result.details) {
+          console.error('   Details:', result.details);
+        }
+        if (result.response_text) {
+          console.error('   Response text:', result.response_text);
+        }
+        if (result.payload_enviado) {
+          console.error('   Payload enviado (desde servidor):', result.payload_enviado);
+        }
+        console.error('───────────────────────────────────────────────────────────');
+        console.error('💡 Mensaje de error para el usuario:', errorMessage);
+        console.error('═══════════════════════════════════════════════════════════');
+        
+        throw new Error(errorMessage);
       }
       
       console.log('✅ [Asesor] Producto guardado exitosamente:', result);
@@ -405,7 +465,15 @@ export default function AdvisorInventoryPage() {
       await loadData();
       
     } catch (err) {
-      console.error('❌ [Asesor] Error al guardar producto:', err);
+      console.error('═══════════════════════════════════════════════════════════');
+      console.error('❌ [Asesor] EXCEPCIÓN AL GUARDAR PRODUCTO');
+      console.error('═══════════════════════════════════════════════════════════');
+      console.error('🔴 Error:', err);
+      if (err instanceof Error) {
+        console.error('📝 Mensaje:', err.message);
+        console.error('📚 Stack:', err.stack);
+      }
+      console.error('═══════════════════════════════════════════════════════════');
       setError(err instanceof Error ? err.message : 'Error al guardar el producto');
     } finally {
       setLoading(false);
@@ -557,64 +625,6 @@ export default function AdvisorInventoryPage() {
     }
   };
 
-  // Función para agregar producto al diccionario
-  const handleAddToDictionary = async (producto: ProductoInventario) => {
-    const productName = producto.producto;
-    
-    // Verificar si ya se está agregando
-    if (addingToDictionary.has(productName)) {
-      return;
-    }
-    
-    try {
-      // Agregar al set de productos en proceso
-      setAddingToDictionary(prev => new Set(prev).add(productName));
-      
-      console.log('📚 [Asesor] Agregando producto al diccionario:', productName);
-      
-      // Llamar al endpoint de diccionario
-      const response = await fetch('/api/inventory/dictionary', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          producto_existente: productName,
-        }),
-      });
-      
-      const result = await response.json();
-      
-      if (!response.ok || !result.success) {
-        const errorMessage = result.message || result.error || 'Error al agregar el producto al diccionario';
-        console.error('❌ [Asesor] Error al agregar al diccionario:', result);
-        throw new Error(errorMessage);
-      }
-      
-      console.log('✅ [Asesor] Producto agregado al diccionario exitosamente:', result);
-      
-      toast({
-        title: '✅ Producto agregado al diccionario',
-        description: `"${productName}" ha sido agregado exitosamente al diccionario.`,
-        variant: 'default',
-      });
-      
-    } catch (err) {
-      console.error('❌ [Asesor] Error al agregar producto al diccionario:', err);
-      toast({
-        title: '❌ Error al agregar al diccionario',
-        description: err instanceof Error ? err.message : 'Ocurrió un error al agregar el producto al diccionario',
-        variant: 'destructive',
-      });
-    } finally {
-      // Remover del set de productos en proceso
-      setAddingToDictionary(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(productName);
-        return newSet;
-      });
-    }
-  };
 
 
   const totalUnits = useMemo(
@@ -996,20 +1006,6 @@ export default function AdvisorInventoryPage() {
                             <TableCell className="text-center">
                               {producto && (
                                 <div className="flex items-center justify-center gap-1">
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => handleAddToDictionary(producto)}
-                                    className="h-8 w-8 p-0"
-                                    title="Agregar al diccionario"
-                                    disabled={addingToDictionary.has(producto.producto)}
-                                  >
-                                    {addingToDictionary.has(producto.producto) ? (
-                                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                                    ) : (
-                                      <BookOpen className="h-4 w-4 text-muted-foreground hover:text-blue-600" />
-                                    )}
-                                  </Button>
                                   <Button
                                     variant="ghost"
                                     size="sm"

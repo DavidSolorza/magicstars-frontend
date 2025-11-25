@@ -209,13 +209,39 @@ export async function POST(request: NextRequest) {
     }
 
     // Log detallado del payload que se enviará
-    console.log('📤 [API] Enviando a webhook de Railway:', {
-      url: API_URLS.ADD_EDIT_DELETE_INVENTARIO,
-      tipo_operacion: payload.tipo_operacion,
-      producto: payload.producto,
-      payload_completo: payload,
-      payload_json_string: JSON.stringify(payload),
-    });
+    console.log('═══════════════════════════════════════════════════════════');
+    console.log('📤 [API] ENVIANDO A WEBHOOK DE RAILWAY');
+    console.log('═══════════════════════════════════════════════════════════');
+    console.log('🌐 ENDPOINT URL:', API_URLS.ADD_EDIT_DELETE_INVENTARIO);
+    console.log('📋 Tipo de operación:', payload.tipo_operacion);
+    console.log('📦 Producto:', payload.producto);
+    if (payload.tienda) console.log('🏪 Tienda:', payload.tienda);
+    if (payload.cantidad !== undefined) console.log('📊 Cantidad:', payload.cantidad);
+    if (payload.stock_minimo !== undefined) console.log('📉 Stock mínimo:', payload.stock_minimo);
+    if (payload.stock_maximo !== undefined) console.log('📈 Stock máximo:', payload.stock_maximo);
+    console.log('👤 Usuario:', payload.usuario);
+    console.log('───────────────────────────────────────────────────────────');
+    console.log('📄 Payload JSON completo:');
+    console.log(JSON.stringify(payload, null, 2));
+    console.log('═══════════════════════════════════════════════════════════');
+    
+    // Validar que todos los campos requeridos estén presentes
+    if (tipoOperacion !== 'eliminar') {
+      const camposRequeridos = ['producto', 'cantidad', 'tienda', 'stock_minimo', 'stock_maximo', 'tipo_operacion', 'usuario'];
+      const camposFaltantes = camposRequeridos.filter(campo => !(campo in payload) || payload[campo] === undefined || payload[campo] === null);
+      if (camposFaltantes.length > 0) {
+        console.error('❌ [API] Campos faltantes en payload:', camposFaltantes);
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'Campos faltantes en payload',
+            campos_faltantes: camposFaltantes,
+            payload: payload,
+          },
+          { status: 400 }
+        );
+      }
+    }
     
     // Log detallado del payload final que se enviará
     if (tipoOperacion === 'eliminar') {
@@ -318,14 +344,31 @@ export async function POST(request: NextRequest) {
         }
       }
       
-      console.error('❌ [API] Error en webhook de Railway:', {
-        status: webhookResponse.status,
-        statusText: webhookResponse.statusText,
-        url: API_URLS.ADD_EDIT_DELETE_INVENTARIO,
-        payload_enviado: payload,
-        error_respuesta: errorDetails,
-        error_texto_completo: responseText.substring(0, 2000),
-      });
+      console.error('═══════════════════════════════════════════════════════════');
+      console.error('❌ [API] ERROR EN WEBHOOK DE RAILWAY');
+      console.error('═══════════════════════════════════════════════════════════');
+      console.error('🌐 URL del webhook:', API_URLS.ADD_EDIT_DELETE_INVENTARIO);
+      console.error('📋 Tipo de operación:', payload.tipo_operacion);
+      console.error('📦 Producto:', payload.producto);
+      if (payload.tienda) console.error('🏪 Tienda:', payload.tienda);
+      if (payload.cantidad !== undefined) console.error('📊 Cantidad:', payload.cantidad);
+      if (payload.stock_minimo !== undefined) console.error('📉 Stock mínimo:', payload.stock_minimo);
+      if (payload.stock_maximo !== undefined) console.error('📈 Stock máximo:', payload.stock_maximo);
+      console.error('👤 Usuario:', payload.usuario);
+      console.error('───────────────────────────────────────────────────────────');
+      console.error('📤 Payload completo enviado al webhook:');
+      console.error(JSON.stringify(payload, null, 2));
+      console.error('───────────────────────────────────────────────────────────');
+      console.error('📥 Respuesta del webhook:');
+      console.error('   Status:', webhookResponse.status);
+      console.error('   Status Text:', webhookResponse.statusText);
+      console.error('   OK:', webhookResponse.ok);
+      console.error('───────────────────────────────────────────────────────────');
+      console.error('📄 Error respuesta (primeros 2000 caracteres):');
+      console.error(responseText.substring(0, 2000));
+      console.error('───────────────────────────────────────────────────────────');
+      console.error('🔍 Error detalles parseado:', errorDetails);
+      console.error('═══════════════════════════════════════════════════════════');
       
       // Mensaje de error más amigable según el tipo de error
       let userFriendlyMessage = `El servidor respondió con error ${webhookResponse.status}`;
@@ -336,17 +379,20 @@ export async function POST(request: NextRequest) {
       }
       
       // Siempre devolver 200 con success: false para que el frontend pueda manejar el error
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Error al procesar en webhook',
-          message: userFriendlyMessage,
-          details: typeof errorDetails === 'string' ? errorDetails : JSON.stringify(errorDetails),
-          status: webhookResponse.status,
-          payload_enviado: payload,
-        },
-        { status: 200 }
-      );
+      // Incluir más información de debugging
+      const errorResponse = {
+        success: false,
+        error: 'Error al procesar en webhook',
+        message: userFriendlyMessage,
+        details: typeof errorDetails === 'string' ? errorDetails : JSON.stringify(errorDetails),
+        status: webhookResponse.status,
+        payload_enviado: payload,
+        response_text: responseText.substring(0, 500), // Primeros 500 caracteres de la respuesta
+      };
+      
+      console.error('❌ [API] Devolviendo error al frontend:', errorResponse);
+      
+      return NextResponse.json(errorResponse, { status: 200 });
     }
 
     // Si la respuesta es exitosa, parsear el JSON
