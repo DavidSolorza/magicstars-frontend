@@ -28,6 +28,8 @@ import {
   Filter,
   Warehouse,
   Trash2,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -35,6 +37,7 @@ import { InventoryMovements } from '@/components/dashboard/inventory-movements';
 import { ProductFormModal } from '@/components/dashboard/product-form-modal';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Plus, Edit } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
 const DEFAULT_MINIMUM_STOCK = 5;
 const DEFAULT_MAXIMUM_STOCK = 100; // Límite provisional de 100
@@ -114,12 +117,14 @@ const getStatusInfo = (
 
 export default function AdminInventoryPage() {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [inventory, setInventory] = useState<ProductoInventario[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedStore, setSelectedStore] = useState<string>('all');
   const [stockFilter, setStockFilter] = useState<StockFilterValue>('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
   
   // Estados para el modal de configuración de alertas
   const [showAlertConfigModal, setShowAlertConfigModal] = useState(false);
@@ -226,12 +231,40 @@ export default function AdminInventoryPage() {
       const isEditing = editingProduct !== null;
       const tipoOperacion = isEditing ? 'editar' : 'nuevo';
       
-      // Preparar payload exactamente como lo requiere el webhook
-      // Formato: producto, cantidad, tienda, stock_minimo, stock_maximo, tipo_operacion, usuario
-      // IMPORTANTE: Enviar TODOS los campos tal como vienen del formulario
-      // El webhook debe tener lógica para encontrar el producto cuando es edición
+      // Verificar qué campos cambiaron (el nombre NO se puede editar, siempre usar el original)
+      const cantidadCambio = isEditing && editingProduct?.cantidad !== productData.cantidad;
+      
+      // Obtener valores de stock de la configuración de alertas o usar defaults
+      const productKey = getProductKey(productData.tienda, editingProduct?.producto || productData.producto);
+      const alertConfig = alertConfigs[productKey];
+      const stockMinimoOriginal = alertConfig?.stockMinimo ?? DEFAULT_MINIMUM_STOCK;
+      const stockMaximoOriginal = alertConfig?.stockMaximo ?? DEFAULT_MAXIMUM_STOCK;
+      
+      const stockMinimoCambio = isEditing && stockMinimoOriginal !== (productData.stock_minimo ?? DEFAULT_MINIMUM_STOCK);
+      const stockMaximoCambio = isEditing && stockMaximoOriginal !== (productData.stock_maximo ?? DEFAULT_MAXIMUM_STOCK);
+      const otrosCamposCambiaron = cantidadCambio || stockMinimoCambio || stockMaximoCambio;
+      
+      console.log('═══════════════════════════════════════════════════════════');
+      console.log('📤 [Admin] PREPARANDO GUARDADO DE PRODUCTO');
+      console.log('═══════════════════════════════════════════════════════════');
+      console.log('📋 Tipo de operación:', tipoOperacion);
+      console.log('✏️  Es edición:', isEditing);
+      if (isEditing) {
+        console.log('📝 Nombre del producto (no editable):', editingProduct?.producto);
+        console.log('📊 ¿Cantidad cambió?:', cantidadCambio);
+        console.log('📉 ¿Stock mínimo cambió?:', stockMinimoCambio);
+        console.log('📈 ¿Stock máximo cambió?:', stockMaximoCambio);
+        console.log('🔄 ¿Otros campos cambiaron?:', otrosCamposCambiaron);
+      }
+      console.log('═══════════════════════════════════════════════════════════');
+      
+      // Para edición, siempre usar el nombre original del producto
+      const nombreParaWebhook = isEditing 
+        ? editingProduct!.producto.trim() // Usar el nombre original, no se puede editar
+        : productData.producto.trim(); // Para nuevo producto
+      
       const payload = {
-        producto: productData.producto.trim(), // Nombre tal como viene del formulario
+        producto: nombreParaWebhook,
         cantidad: productData.cantidad || 0,
         tienda: productData.tienda.trim(),
         stock_minimo: productData.stock_minimo ?? DEFAULT_MINIMUM_STOCK,
@@ -240,96 +273,57 @@ export default function AdminInventoryPage() {
         usuario: user?.name || user?.email || 'admin',
       };
       
-      // Log detallado antes de enviar
-      console.log('═══════════════════════════════════════════════════════════');
-      console.log('📤 [Admin] PREPARANDO PAYLOAD PARA ENVIAR');
-      console.log('═══════════════════════════════════════════════════════════');
-      console.log('📋 Tipo de operación:', tipoOperacion);
-      console.log('✏️  Es edición:', isEditing);
-      if (isEditing) {
-        console.log('📝 Nombre ORIGINAL (de BD):', editingProduct?.producto);
-        console.log('📝 Nombre NUEVO (del formulario):', productData.producto);
-        console.log('🔄 ¿Nombre cambió?:', editingProduct?.producto !== productData.producto);
-      }
-      console.log('📦 Producto en payload:', payload.producto);
-      console.log('🏪 Tienda:', payload.tienda);
-      console.log('📊 Cantidad:', payload.cantidad);
-      console.log('📉 Stock mínimo:', payload.stock_minimo);
-      console.log('📈 Stock máximo:', payload.stock_maximo);
-      console.log('👤 Usuario:', payload.usuario);
-      console.log('───────────────────────────────────────────────────────────');
-      console.log('📄 Payload JSON completo:');
-      console.log(JSON.stringify(payload, null, 2));
-      console.log('═══════════════════════════════════════════════════════════');
-      
-      // Log para debugging
-      if (isEditing) {
-        console.log('📝 [Admin] Editando producto:', {
-          nombre_original: editingProduct?.producto,
-          nombre_nuevo: productData.producto,
-          nombre_cambio: editingProduct?.producto !== productData.producto,
-          producto_en_payload: payload.producto,
-        });
-      }
-      
-      console.log('📤 [Admin] Enviando producto al endpoint:', {
-        tipo_operacion: tipoOperacion,
+      console.log('📤 [Admin] Enviando otros campos al webhook:', {
         producto: payload.producto,
-        es_edicion: isEditing,
-        editingProduct: editingProduct,
-        usuario: payload.usuario,
+        cantidad: payload.cantidad,
+        stock_minimo: payload.stock_minimo,
+        stock_maximo: payload.stock_maximo,
       });
       
-      // Llamar al endpoint
-      const response = await fetch('/api/inventory', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      });
-      
-      const result = await response.json();
-      
-      if (!response.ok || !result.success) {
-        // Mostrar error más detallado y claro
-        const errorMessage = result.message || result.error || result.details || 'Error al guardar el producto';
+      // Llamar al endpoint solo si hay otros campos que cambiar o es nuevo
+      if (!isEditing || otrosCamposCambiaron) {
+        const response = await fetch('/api/inventory', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(payload),
+        });
         
-        console.error('═══════════════════════════════════════════════════════════');
-        console.error('❌ [Admin] ERROR AL GUARDAR PRODUCTO');
-        console.error('═══════════════════════════════════════════════════════════');
-        console.error('📋 Tipo de operación:', tipoOperacion);
-        console.error('📦 Producto:', payload.producto);
-        console.error('🏪 Tienda:', payload.tienda);
-        console.error('📊 Cantidad:', payload.cantidad);
-        console.error('📉 Stock mínimo:', payload.stock_minimo);
-        console.error('📈 Stock máximo:', payload.stock_maximo);
-        console.error('👤 Usuario:', payload.usuario);
-        console.error('───────────────────────────────────────────────────────────');
-        console.error('📤 Payload completo enviado:', JSON.stringify(payload, null, 2));
-        console.error('───────────────────────────────────────────────────────────');
-        console.error('📥 Respuesta del servidor:');
-        console.error('   Status:', response.status);
-        console.error('   Success:', result.success);
-        console.error('   Error:', result.error);
-        console.error('   Message:', result.message);
-        if (result.details) {
-          console.error('   Details:', result.details);
-        }
-        if (result.response_text) {
-          console.error('   Response text:', result.response_text);
-        }
-        if (result.payload_enviado) {
-          console.error('   Payload enviado (desde servidor):', result.payload_enviado);
-        }
-        console.error('───────────────────────────────────────────────────────────');
-        console.error('💡 Mensaje de error para el usuario:', errorMessage);
-        console.error('═══════════════════════════════════════════════════════════');
+        const result = await response.json();
         
-        throw new Error(errorMessage);
+        if (!response.ok || !result.success) {
+          const errorMessage = result.message || result.error || result.details || 'Error al guardar el producto';
+          console.error('❌ [Admin] Error del webhook:', errorMessage);
+          throw new Error(errorMessage);
+        }
+        
+        console.log('✅ [Admin] Campos actualizados exitosamente en webhook:', result);
       }
       
-      console.log('✅ [Admin] Producto guardado exitosamente:', result);
+      console.log('✅ [Admin] Producto guardado exitosamente');
+      
+      // Mostrar mensaje de éxito con tarjeta
+      toast({
+        title: '✅ Producto guardado exitosamente',
+        description: (
+          <div className="space-y-1.5 mt-1">
+            <p className="font-semibold text-sm">{isEditing ? 'Producto actualizado' : 'Producto creado'}</p>
+            <p className="text-xs opacity-90">
+              {isEditing 
+                ? `"${editingProduct?.producto}" ha sido actualizado correctamente.`
+                : `"${payload.producto}" ha sido agregado al inventario.`}
+            </p>
+            {isEditing && otrosCamposCambiaron && (
+              <p className="text-xs opacity-80">
+                Cantidad: {payload.cantidad} | Stock mínimo: {payload.stock_minimo} | Stock máximo: {payload.stock_maximo}
+              </p>
+            )}
+          </div>
+        ),
+        variant: 'success',
+        duration: 4000,
+      });
       
       // Cerrar el modal y limpiar estados
       if (editingProduct) {
@@ -562,6 +556,18 @@ export default function AdminInventoryPage() {
       return (a.producto || '').localeCompare(b.producto || '', 'es', { sensitivity: 'base' });
     });
   }, [filteredItems]);
+
+  // Paginación: 10 productos por página
+  const ITEMS_PER_PAGE = 10;
+  const totalPages = Math.ceil(sortedItems.length / ITEMS_PER_PAGE);
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+  const endIndex = startIndex + ITEMS_PER_PAGE;
+  const paginatedItems = sortedItems.slice(startIndex, endIndex);
+
+  // Resetear a página 1 cuando cambian los filtros
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, stockFilter, selectedStore]);
 
   const totalUnits = useMemo(
     () => inventoryForStore.reduce((sum, item) => sum + (Number(item.cantidad) || 0), 0),
@@ -849,7 +855,7 @@ export default function AdminInventoryPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {sortedItems.map((item, index) => {
+                  {paginatedItems.map((item, index) => {
                     const storeName = normalizeStoreName(item.tienda);
                     const key = getProductKey(item.tienda, item.producto);
                     const config = alertConfigs[key];
@@ -907,6 +913,55 @@ export default function AdminInventoryPage() {
                   })}
                 </TableBody>
               </Table>
+            </div>
+          )}
+          
+          {/* Paginación con puntos */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-3 mt-6 pt-4 border-t">
+              <button
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={currentPage === 1}
+                className={cn(
+                  'p-1.5 rounded-md transition-all duration-200',
+                  currentPage === 1
+                    ? 'opacity-30 cursor-not-allowed'
+                    : 'hover:bg-muted hover:scale-110 cursor-pointer'
+                )}
+                aria-label="Página anterior"
+              >
+                <ChevronLeft className="h-5 w-5 text-muted-foreground" />
+              </button>
+              
+              <div className="flex items-center gap-2">
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                  <button
+                    key={page}
+                    onClick={() => setCurrentPage(page)}
+                    className={cn(
+                      'rounded-full transition-all duration-200',
+                      currentPage === page
+                        ? 'w-2.5 h-2.5 bg-primary scale-125'
+                        : 'w-2 h-2 border border-muted-foreground/30 hover:border-muted-foreground/50 bg-transparent'
+                    )}
+                    aria-label={`Ir a página ${page}`}
+                  />
+                ))}
+              </div>
+              
+              <button
+                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                disabled={currentPage === totalPages}
+                className={cn(
+                  'p-1.5 rounded-md transition-all duration-200',
+                  currentPage === totalPages
+                    ? 'opacity-30 cursor-not-allowed'
+                    : 'hover:bg-muted hover:scale-110 cursor-pointer'
+                )}
+                aria-label="Página siguiente"
+              >
+                <ChevronRight className="h-5 w-5 text-muted-foreground" />
+              </button>
             </div>
           )}
         </CardContent>

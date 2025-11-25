@@ -20,7 +20,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Package, Plus, Edit } from 'lucide-react';
+import { Package, Plus, Edit, AlertCircle } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { cn } from '@/lib/utils';
 
 interface ProductFormModalProps {
   open: boolean;
@@ -41,9 +43,15 @@ export function ProductFormModal({
   hideStoreField = false,
   defaultStore,
 }: ProductFormModalProps) {
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    producto: string;
+    cantidad: number | '';
+    tienda: string;
+    stock_minimo: number;
+    stock_maximo: number;
+  }>({
     producto: '',
-    cantidad: 0,
+    cantidad: '',
     tienda: stores[0] || '',
     stock_minimo: 5,
     stock_maximo: 20,
@@ -57,7 +65,7 @@ export function ProductFormModal({
     if (product) {
       setFormData({
         producto: product.producto || '',
-        cantidad: product.cantidad || 0,
+        cantidad: product.cantidad ?? '',
         tienda: defaultTienda,
         stock_minimo: 5,
         stock_maximo: 20,
@@ -65,7 +73,7 @@ export function ProductFormModal({
     } else {
       setFormData({
         producto: '',
-        cantidad: 0,
+        cantidad: '',
         tienda: defaultTienda,
         stock_minimo: 5,
         stock_maximo: 20,
@@ -78,8 +86,13 @@ export function ProductFormModal({
     if (!formData.producto.trim()) {
       return;
     }
+    
+    // Convertir cantidad vacía a 0 para el guardado
+    const cantidadValue = formData.cantidad === '' ? 0 : Number(formData.cantidad);
+    
     onSave({
       ...formData,
+      cantidad: cantidadValue,
       stock_minimo: formData.stock_minimo,
       stock_maximo: formData.stock_maximo,
     });
@@ -87,6 +100,42 @@ export function ProductFormModal({
   };
 
   const isEditing = !!product;
+  
+  // Validación de cantidad (solo aplica al editar)
+  const getCantidadValidation = () => {
+    if (!isEditing) return { isValid: true, error: null };
+    
+    const cantidadValue = formData.cantidad === '' ? null : Number(formData.cantidad);
+    const isEmpty = cantidadValue === null || formData.cantidad === '';
+    const isInvalid = cantidadValue !== null && (isNaN(cantidadValue) || cantidadValue < 0);
+    const isBelowMinimum = cantidadValue !== null && !isNaN(cantidadValue) && cantidadValue < formData.stock_minimo;
+    
+    if (isEmpty) {
+      return {
+        isValid: false,
+        error: 'La cantidad no puede estar vacía al editar un producto',
+      };
+    }
+    
+    if (isInvalid) {
+      return {
+        isValid: false,
+        error: 'La cantidad debe ser un número válido mayor o igual a 0',
+      };
+    }
+    
+    if (isBelowMinimum) {
+      return {
+        isValid: false,
+        error: `La cantidad no puede ser menor al stock mínimo (${formData.stock_minimo} unidades)`,
+      };
+    }
+    
+    return { isValid: true, error: null };
+  };
+  
+  const cantidadValidation = getCantidadValidation();
+  const isSaveDisabled = isEditing && !cantidadValidation.isValid;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -126,6 +175,7 @@ export function ProductFormModal({
               className="h-9"
               required
               disabled={isEditing}
+              title={isEditing ? "El nombre del producto no se puede editar" : ""}
             />
             {isEditing && (
               <p className="text-xs text-muted-foreground">
@@ -137,18 +187,45 @@ export function ProductFormModal({
           <div className="space-y-2">
             <Label htmlFor="cantidad" className="text-sm font-semibold">
               Cantidad Inicial en Stock
+              {isEditing && (
+                <span className="ml-1 text-xs font-normal text-muted-foreground">
+                  (mínimo: {formData.stock_minimo})
+                </span>
+              )}
             </Label>
             <Input
               id="cantidad"
               type="number"
               min="0"
               value={formData.cantidad}
-              onChange={(e) =>
-                setFormData({ ...formData, cantidad: parseInt(e.target.value, 10) || 0 })
-              }
-              placeholder="0"
-              className="h-9"
+              onChange={(e) => {
+                const value = e.target.value;
+                // Permitir campo vacío o números válidos
+                if (value === '') {
+                  setFormData({ ...formData, cantidad: '' });
+                } else {
+                  const numValue = parseInt(value, 10);
+                  if (!isNaN(numValue) && numValue >= 0) {
+                    setFormData({ ...formData, cantidad: numValue });
+                  }
+                }
+              }}
+              placeholder={isEditing ? `Mínimo: ${formData.stock_minimo}` : "Ingresa la cantidad"}
+              className={cn(
+                "h-9",
+                cantidadValidation.error && "border-destructive focus-visible:ring-destructive"
+              )}
             />
+            {cantidadValidation.error && (
+              <Alert variant="destructive" className="py-2.5">
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                  <AlertDescription className="text-xs leading-relaxed">
+                    {cantidadValidation.error}
+                  </AlertDescription>
+                </div>
+              </Alert>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -218,7 +295,13 @@ export function ProductFormModal({
             >
               Cancelar
             </Button>
-            <Button type="submit" className="h-9 w-full text-xs sm:w-auto" size="sm">
+            <Button 
+              type="submit" 
+              className="h-9 w-full text-xs sm:w-auto" 
+              size="sm"
+              disabled={isSaveDisabled}
+              title={cantidadValidation.error || undefined}
+            >
               {isEditing ? (
                 <>
                   <Edit className="mr-1.5 h-3.5 w-3.5" />

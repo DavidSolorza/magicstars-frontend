@@ -3,6 +3,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { ProductoInventario } from '@/lib/supabase-inventario';
 import { Order } from '@/lib/types';
+import { useAuth } from '@/contexts/auth-context';
+import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -273,6 +275,9 @@ const deleteCombo = (comboId: string) => {
   }
 };
 
+const DEFAULT_MINIMUM_STOCK = 5;
+const DEFAULT_MAXIMUM_STOCK = 100;
+
 export function UnmappedProductsManager({
   orders,
   inventory,
@@ -280,6 +285,8 @@ export function UnmappedProductsManager({
   onInventoryUpdate,
   defaultStore,
 }: UnmappedProductsManagerProps) {
+  const { user } = useAuth();
+  const { toast } = useToast();
   const [unmappedProducts, setUnmappedProducts] = useState<UnmappedProduct[]>([]);
   const [selectedUnmapped, setSelectedUnmapped] = useState<UnmappedProduct | null>(null);
   const [selectedMappedProduct, setSelectedMappedProduct] = useState<string>('');
@@ -447,13 +454,42 @@ export function UnmappedProductsManager({
         },
       });
 
-      const response = await fetch(API_URLS.ADD_DICCIONARIO, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      });
+      // Enviar al endpoint de diccionario de combos
+      try {
+        // combo_nuevo: array de productos que van en el combo
+        const comboNuevo: string[] = [selectedMappedProduct.trim()];
+        
+        // combo_existente: nombre del combo sin cantidades
+        // Usar el nombre del producto no encontrado pero limpiar cantidades
+        let comboExistente = selectedUnmapped.name;
+        // Remover paréntesis y limpiar
+        comboExistente = comboExistente.replace(/^\(|\)$/g, '').trim();
+        // Remover patrones como "2 X ", "3x ", etc. del inicio
+        comboExistente = comboExistente.replace(/^\d+\s*[xX]\s*/i, '').trim();
+        
+        const payload = {
+          combo_existente: comboExistente, // Nombre del combo sin cantidades
+          combo_nuevo: comboNuevo, // Array de productos que van en el combo
+        };
+
+        console.log('📤 Enviando combo simple al diccionario:', {
+          endpoint: API_URLS.ADD_DICCIONARIO_COMBOS,
+          payload,
+          detalle: {
+            producto_no_encontrado: selectedUnmapped.name,
+            producto_inventario: selectedMappedProduct,
+            cantidad: mappingQuantity,
+            productos_array: comboNuevo,
+          },
+        });
+        
+        const response = await fetch(API_URLS.ADD_DICCIONARIO_COMBOS, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(payload),
+        });
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -586,19 +622,18 @@ export function UnmappedProductsManager({
 
     // Enviar al endpoint de diccionario de combos
     try {
-      // Extraer el nombre del producto no encontrado sin cantidad ni paréntesis
-      const nombreSinCantidad = extractNameWithoutParentheses(selectedUnmapped.name)
-        .replace(/^\d+\s*[xX]\s*/i, '') // Remover "1 X " o "2X " del inicio
-        .trim();
-
-      // Crear string con formato "1 X PRODUCTO1, 3 X PRODUCTO2"
-      const comboNuevoString = comboItems
-        .map(item => `${item.quantity} X ${item.productName.trim()}`)
-        .join(', ');
-
+      // combo_nuevo: array de productos que van en el combo (nombres de productos, sin cantidades)
+      const comboNuevo: string[] = comboItems.map(item => item.productName.trim());
+      
+      // combo_existente: nombre del combo sin cantidades (el nombre del combo en el front)
+      // Limpiar el nombre del combo para quitar cantidades si las hay
+      let comboExistente = comboName.trim();
+      // Remover patrones como "2 X ", "3x ", etc. del inicio
+      comboExistente = comboExistente.replace(/^\d+\s*[xX]\s*/i, '').trim();
+      
       const payload = {
-        combo_existente: nombreSinCantidad, // Producto no encontrado sin cantidad ni paréntesis
-        combo_nuevo: comboNuevoString, // String con formato "1 X PRODUCTO1, 3 X PRODUCTO2"
+        combo_existente: comboExistente, // Nombre del combo sin cantidades
+        combo_nuevo: comboNuevo, // Array de productos que van en el combo
       };
 
       console.log('📤 Enviando combo al diccionario:', {
@@ -715,36 +750,88 @@ export function UnmappedProductsManager({
     setShowCreateProductModal(true);
   };
 
-  const handleSaveNewProduct = (productData: Omit<ProductoInventario, 'idx'>) => {
-    // Crear nuevo producto
-    const newProduct: ProductoInventario = {
-      ...productData,
-      idx: Date.now(), // ID temporal
-    };
-    
-    // Actualizar inventario
-    onInventoryUpdate?.(newProduct);
-    
-    // Asignar automáticamente el producto recién creado
-    setSelectedMappedProduct(productData.producto);
-    setShowCreateProductModal(false);
-    
-    // Si hay un producto no encontrado seleccionado, guardar el mapeo automáticamente
-    if (selectedUnmapped) {
-      const normalized = normalizeProductName(selectedUnmapped.name);
-      saveMapping(selectedUnmapped.name, productData.producto);
-      setSavedMappings(prev => ({
-        ...prev,
-        [normalized]: productData.producto,
-      }));
+  const handleSaveNewProduct = async (productData: Omit<ProductoInventario, 'idx'> & { stock_minimo?: number; stock_maximo?: number }) => {
+    try {
+      // Preparar payload para el webhook (misma lógica que en inventario)
+      const payload = {
+        producto: productData.producto.trim(),
+        cantidad: productData.cantidad || 0,
+        tienda: productData.tienda.trim(),
+        stock_minimo: productData.stock_minimo ?? DEFAULT_MINIMUM_STOCK,
+        stock_maximo: productData.stock_maximo ?? DEFAULT_MAXIMUM_STOCK,
+        tipo_operacion: 'nuevo',
+        usuario: user?.name || user?.email || 'asesor',
+      };
       
-      // Remover de la lista
-      setUnmappedProducts(prev =>
-        prev.filter(p => normalizeProductName(p.name) !== normalized)
-      );
+      console.log('📤 [UnmappedProducts] Creando nuevo producto:', payload);
       
-      setShowMappingDialog(false);
-      onMappingSaved?.();
+      // Llamar al endpoint de inventario
+      const response = await fetch('/api/inventory', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+      
+      const result = await response.json();
+      
+      if (!response.ok || !result.success) {
+        const errorMessage = result.message || result.error || result.details || 'Error al crear el producto';
+        console.error('❌ [UnmappedProducts] Error al crear producto:', errorMessage);
+        toast({
+          title: '❌ Error al crear producto',
+          description: errorMessage,
+          variant: 'destructive',
+        });
+        throw new Error(errorMessage);
+      }
+      
+      console.log('✅ [UnmappedProducts] Producto creado exitosamente:', result);
+      
+      // Crear nuevo producto localmente para actualizar el inventario
+      const newProduct: ProductoInventario = {
+        ...productData,
+        idx: Date.now(), // ID temporal
+      };
+      
+      // Actualizar inventario
+      onInventoryUpdate?.(newProduct);
+      
+      // Asignar automáticamente el producto recién creado
+      setSelectedMappedProduct(productData.producto);
+      setShowCreateProductModal(false);
+      
+      // Si hay un producto no encontrado seleccionado, guardar el mapeo automáticamente
+      if (selectedUnmapped) {
+        const normalized = normalizeProductName(selectedUnmapped.name);
+        saveMapping(selectedUnmapped.name, productData.producto);
+        setSavedMappings(prev => ({
+          ...prev,
+          [normalized]: productData.producto,
+        }));
+        
+        // Remover de la lista
+        setUnmappedProducts(prev =>
+          prev.filter(p => normalizeProductName(p.name) !== normalized)
+        );
+        
+        setShowMappingDialog(false);
+        onMappingSaved?.();
+      }
+      
+      toast({
+        title: '✅ Producto creado exitosamente',
+        description: `El producto "${productData.producto}" ha sido creado en el inventario.`,
+        variant: 'default',
+      });
+    } catch (err) {
+      console.error('❌ [UnmappedProducts] Error al crear producto:', err);
+      toast({
+        title: '❌ Error al crear producto',
+        description: err instanceof Error ? err.message : 'Ocurrió un error al crear el producto',
+        variant: 'destructive',
+      });
     }
   };
 
@@ -755,42 +842,94 @@ export function UnmappedProductsManager({
     setShowCreateProductFromComboModal(true);
   };
 
-  const handleSaveNewProductFromCombo = (productData: Omit<ProductoInventario, 'idx'>) => {
-    // Crear nuevo producto
-    const newProduct: ProductoInventario = {
-      ...productData,
-      idx: Date.now(), // ID temporal
-    };
-    
-    // Actualizar inventario
-    onInventoryUpdate?.(newProduct);
-    
-    // Cerrar modal de creación
-    setShowCreateProductFromComboModal(false);
-    
-    // Verificar si el producto ya existe en el combo
-    const normalizedNew = normalizeProductName(productData.producto);
-    const existingIndex = comboItems.findIndex(
-      item => normalizeProductName(item.productName) === normalizedNew
-    );
-    
-    if (existingIndex >= 0) {
-      // Actualizar cantidad si ya existe
-      const updated = [...comboItems];
-      updated[existingIndex].quantity += selectedComboQuantity;
-      setComboItems(updated);
-    } else {
-      // Agregar automáticamente el producto recién creado al combo con la cantidad seleccionada
-      setComboItems(prev => [...prev, {
-        productName: productData.producto,
-        quantity: selectedComboQuantity,
-      }]);
+  const handleSaveNewProductFromCombo = async (productData: Omit<ProductoInventario, 'idx'> & { stock_minimo?: number; stock_maximo?: number }) => {
+    try {
+      // Preparar payload para el webhook (misma lógica que en inventario)
+      const payload = {
+        producto: productData.producto.trim(),
+        cantidad: productData.cantidad || 0,
+        tienda: productData.tienda.trim(),
+        stock_minimo: productData.stock_minimo ?? DEFAULT_MINIMUM_STOCK,
+        stock_maximo: productData.stock_maximo ?? DEFAULT_MAXIMUM_STOCK,
+        tipo_operacion: 'nuevo',
+        usuario: user?.name || user?.email || 'asesor',
+      };
+      
+      console.log('📤 [UnmappedProducts] Creando nuevo producto desde combo:', payload);
+      
+      // Llamar al endpoint de inventario
+      const response = await fetch('/api/inventory', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+      
+      const result = await response.json();
+      
+      if (!response.ok || !result.success) {
+        const errorMessage = result.message || result.error || result.details || 'Error al crear el producto';
+        console.error('❌ [UnmappedProducts] Error al crear producto desde combo:', errorMessage);
+        toast({
+          title: '❌ Error al crear producto',
+          description: errorMessage,
+          variant: 'destructive',
+        });
+        throw new Error(errorMessage);
+      }
+      
+      console.log('✅ [UnmappedProducts] Producto creado exitosamente desde combo:', result);
+      
+      // Crear nuevo producto localmente para actualizar el inventario
+      const newProduct: ProductoInventario = {
+        ...productData,
+        idx: Date.now(), // ID temporal
+      };
+      
+      // Actualizar inventario
+      onInventoryUpdate?.(newProduct);
+      
+      // Cerrar modal de creación
+      setShowCreateProductFromComboModal(false);
+      
+      // Verificar si el producto ya existe en el combo
+      const normalizedNew = normalizeProductName(productData.producto);
+      const existingIndex = comboItems.findIndex(
+        item => normalizeProductName(item.productName) === normalizedNew
+      );
+      
+      if (existingIndex >= 0) {
+        // Actualizar cantidad si ya existe
+        const updated = [...comboItems];
+        updated[existingIndex].quantity += selectedComboQuantity;
+        setComboItems(updated);
+      } else {
+        // Agregar automáticamente el producto recién creado al combo con la cantidad seleccionada
+        setComboItems(prev => [...prev, {
+          productName: productData.producto,
+          quantity: selectedComboQuantity,
+        }]);
+      }
+      
+      // Limpiar selección
+      setSelectedComboProduct('');
+      setSelectedComboQuantity(1);
+      setComboProductSearchTerm('');
+      
+      toast({
+        title: '✅ Producto creado exitosamente',
+        description: `El producto "${productData.producto}" ha sido creado en el inventario.`,
+        variant: 'default',
+      });
+    } catch (err) {
+      console.error('❌ [UnmappedProducts] Error al crear producto desde combo:', err);
+      toast({
+        title: '❌ Error al crear producto',
+        description: err instanceof Error ? err.message : 'Ocurrió un error al crear el producto',
+        variant: 'destructive',
+      });
     }
-    
-    // Limpiar selección
-    setSelectedComboProduct('');
-    setSelectedComboQuantity(1);
-    setComboProductSearchTerm('');
   };
 
   if (unmappedProducts.length === 0) {
