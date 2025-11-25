@@ -177,6 +177,11 @@ export function ProductFormModal({
               disabled={isEditing}
               title={isEditing ? "El nombre del producto no se puede editar" : ""}
             />
+            {isEditing && (
+              <p className="text-xs text-muted-foreground">
+                El nombre del producto no se puede modificar
+              </p>
+            )}
           </div>
 
           <div className="space-y-2">

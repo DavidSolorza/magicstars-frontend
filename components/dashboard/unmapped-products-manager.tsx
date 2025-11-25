@@ -421,32 +421,38 @@ export function UnmappedProductsManager({
     if (!selectedUnmapped || !selectedMappedProduct) return;
 
     const normalized = normalizeProductName(selectedUnmapped.name);
-    
-    // Si la cantidad es mayor a 1, crear un combo simple automáticamente
-    if (mappingQuantity > 1) {
-      // Crear combo simple con un solo producto
-      const comboId = `combo-simple-${Date.now()}`;
-      const combo: ProductCombo = {
-        id: comboId,
-        name: `${selectedMappedProduct} x${mappingQuantity}`,
-        items: [{
-          productName: selectedMappedProduct,
-          quantity: mappingQuantity,
-        }],
-        createdAt: new Date().toISOString(),
+
+    // Mapeo simple - siempre enviar al endpoint de diccionario
+    // Los combos solo se crean cuando el usuario usa el botón "Crear combo" explícitamente
+    saveMapping(selectedUnmapped.name, selectedMappedProduct, false, undefined, 1);
+
+    // Actualizar estado local
+    setSavedMappings(prev => ({
+      ...prev,
+      [normalized]: selectedMappedProduct,
+    }));
+
+    // Enviar al endpoint de diccionario (producto simple)
+    try {
+      // Extraer el nombre del producto sin la cantidad (ej: "(1 X TURKESTERONE)" -> "TURKESTERONE")
+      const nombreSinCantidad = extractNameWithoutParentheses(selectedUnmapped.name)
+        .replace(/^\d+\s*[xX]\s*/i, '') // Remover "1 X " o "2X " del inicio
+        .trim();
+
+      const payload = {
+        producto_existente: selectedMappedProduct, // Producto del inventario seleccionado
+        producto_nuevo: nombreSinCantidad, // Nombre sin cantidad ni paréntesis (producto no encontrado)
       };
 
-      saveCombo(combo);
-      setCombos(prev => [...prev, combo]);
-      
-      // Guardar mapeo como combo
-      const comboMappingName = `COMBO:${combo.name}`;
-      saveMapping(selectedUnmapped.name, comboMappingName, true, comboId);
-      
-      setSavedMappings(prev => ({
-        ...prev,
-        [normalized]: comboMappingName,
-      }));
+      console.log('📤 Enviando mapeo simple al diccionario:', {
+        endpoint: API_URLS.ADD_DICCIONARIO,
+        payload,
+        detalle: {
+          producto_original_completo: selectedUnmapped.name,
+          producto_sin_cantidad: nombreSinCantidad,
+          producto_inventario: selectedMappedProduct,
+        },
+      });
 
       // Enviar al endpoint de diccionario de combos
       try {
@@ -485,29 +491,19 @@ export function UnmappedProductsManager({
           body: JSON.stringify(payload),
         });
 
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error('❌ Error al enviar combo al diccionario:', {
-            status: response.status,
-            statusText: response.statusText,
-            error: errorText,
-          });
-        } else {
-          const responseData = await response.json().catch(() => ({}));
-          console.log('✅ Combo enviado al diccionario exitosamente:', responseData);
-        }
-      } catch (error) {
-        console.error('❌ Error al enviar combo al diccionario:', error);
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ Error al enviar mapeo al diccionario:', {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorText,
+        });
+      } else {
+        const responseData = await response.json().catch(() => ({}));
+        console.log('✅ Mapeo enviado al diccionario exitosamente:', responseData);
       }
-    } else {
-      // Mapeo simple sin cantidad
-      saveMapping(selectedUnmapped.name, selectedMappedProduct, false, undefined, 1);
-      
-      // Actualizar estado local
-      setSavedMappings(prev => ({
-        ...prev,
-        [normalized]: selectedMappedProduct,
-      }));
+    } catch (error) {
+      console.error('❌ Error al enviar mapeo al diccionario:', error);
     }
 
     // Remover de la lista de no mapeados
@@ -644,9 +640,10 @@ export function UnmappedProductsManager({
         endpoint: API_URLS.ADD_DICCIONARIO_COMBOS,
         payload,
         detalle: {
-          producto_no_encontrado: selectedUnmapped.name,
-          productos_inventario: comboNuevo,
-          cantidad_productos: comboNuevo.length,
+          producto_original_completo: selectedUnmapped.name,
+          producto_sin_cantidad: nombreSinCantidad,
+          combo_string: comboNuevoString,
+          items: comboItems,
         },
       });
       
