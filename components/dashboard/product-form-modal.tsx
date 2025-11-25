@@ -114,7 +114,7 @@ export function ProductFormModal({
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">J
+          <div className="space-y-2">
             <Label htmlFor="producto" className="text-sm font-semibold">
               Nombre del Producto *
             </Label>
@@ -125,7 +125,13 @@ export function ProductFormModal({
               placeholder="Ej: ACEITE DE OREGANO"
               className="h-9"
               required
+              disabled={isEditing}
             />
+            {isEditing && (
+              <p className="text-xs text-muted-foreground">
+                El nombre del producto no se puede modificar
+              </p>
+            )}
           </div>
 
           <div className="space-y-2">
