@@ -391,6 +391,9 @@ export default function AdvisorInventoryPage() {
         ? editingProduct!.producto.trim() // Usar el nombre original, no se puede editar
         : productData.producto.trim(); // Para nuevo producto
       
+      // Obtener la hora actual del navegador (hora exacta del momento de la acción)
+      const now = new Date();
+      
       const payload = {
         producto: nombreParaWebhook,
         cantidad: productData.cantidad || 0,
@@ -399,7 +402,13 @@ export default function AdvisorInventoryPage() {
         stock_maximo: productData.stock_maximo ?? DEFAULT_MAXIMUM_STOCK,
         tipo_operacion: tipoOperacion,
         usuario: user?.name || user?.email || 'asesor',
+        fecha_movimiento: now.toISOString(), // Hora exacta del momento de la acción
       };
+      
+      console.log('🕐 [Asesor] Hora del movimiento enviada:', {
+        hora_local: `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`,
+        iso: now.toISOString(),
+      });
       
       console.log('📤 [Asesor] Enviando otros campos al webhook:', {
         producto: payload.producto,
@@ -517,12 +526,21 @@ export default function AdvisorInventoryPage() {
         producto_original_encontrado: !!productoOriginal,
       });
       
-      // Preparar payload para eliminar - solo los 3 campos requeridos
+      // Obtener la hora actual del navegador (hora exacta del momento de la acción)
+      const now = new Date();
+      
+      // Preparar payload para eliminar
       const payload = {
         producto: productoNombre, // Usar el nombre exacto de la BD
         tipo_operacion: 'eliminar',
         usuario: user?.name || user?.email || 'asesor',
+        fecha_movimiento: now.toISOString(), // Hora exacta del momento de la acción
       };
+      
+      console.log('🕐 [Asesor] Hora del movimiento (eliminar):', {
+        hora_local: `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`,
+        iso: now.toISOString(),
+      });
       
       console.log('🗑️ [Asesor] Eliminando producto:', payload);
       

@@ -233,17 +233,18 @@ export function InventoryMovements({ productos, limit = 20, tiendaFilter }: Inve
     setCurrentPage(1);
   }, [selectedDate, reloadTrigger]);
 
-  // Función para convertir fecha UTC a zona horaria de Costa Rica
+  // Función para convertir fecha UTC a zona horaria de Costa Rica (resta 1 hora)
   const convertToCostaRicaTime = (dateString: string | Date) => {
     try {
       const date = typeof dateString === 'string' ? new Date(dateString) : dateString;
       if (isNaN(date.getTime())) return null;
       
-      // Convertir a zona horaria de Costa Rica (UTC-6)
-      // Usar toLocaleString con timeZone para obtener la fecha/hora correcta
-      const crDateString = date.toLocaleString('en-US', { timeZone: 'America/Costa_Rica' });
-      return new Date(crDateString);
+      // Restar 1 hora (3600000 milisegundos) para ajustar a hora de Costa Rica
+      const crDate = new Date(date.getTime() - (1 * 60 * 60 * 1000));
+      
+      return crDate;
     } catch (e) {
+      console.error('Error convirtiendo a hora de Costa Rica:', e);
       return null;
     }
   };
@@ -251,7 +252,7 @@ export function InventoryMovements({ productos, limit = 20, tiendaFilter }: Inve
   // Función para formatear fechas en formato de Costa Rica de forma amigable
   const formatDateCR = (dateString: string | Date) => {
     try {
-      // Convertir primero a zona horaria de Costa Rica
+      // Convertir primero a zona horaria de Costa Rica (resta 1 hora)
       const crDate = convertToCostaRicaTime(dateString);
       if (!crDate) return { fecha: '-', hora: '' };
       
@@ -266,12 +267,15 @@ export function InventoryMovements({ productos, limit = 20, tiendaFilter }: Inve
       const mes = meses[crDate.getMonth()];
       const anio = crDate.getFullYear();
       const diaSemana = diasSemana[crDate.getDay()];
+      
+      // Obtener horas, minutos y segundos después de restar 1 hora
       const horas = crDate.getHours().toString().padStart(2, '0');
       const minutos = crDate.getMinutes().toString().padStart(2, '0');
       const segundos = crDate.getSeconds().toString().padStart(2, '0');
       
       // Formato: "Lun, 23 de noviembre de 2025"
       const fechaCompleta = `${diaSemana}, ${dia} de ${mes} de ${anio}`;
+      // Hora con formato 24 horas
       const horaCompleta = `${horas}:${minutos}:${segundos}`;
       
       return {
@@ -805,18 +809,18 @@ export function InventoryMovements({ productos, limit = 20, tiendaFilter }: Inve
                           </pre>
                         );
                       } else if (typeof value === 'string' && (key.toLowerCase().includes('fecha') || key.toLowerCase().includes('date') || key.toLowerCase().includes('created') || key.toLowerCase().includes('timestamp'))) {
-                        // Formatear fechas de forma amigable
+                        // Formatear fechas de forma amigable con hora de Costa Rica
                         try {
                           const date = new Date(value);
                           if (!isNaN(date.getTime())) {
                             const fechaInfo = formatDateCR(date);
                             displayValue = (
-                              <div className="flex flex-col">
-                                <span className="font-semibold text-slate-900">
+                              <div className="flex flex-col gap-1">
+                                <span className="font-semibold text-slate-900 dark:text-slate-100">
                                   {fechaInfo.fecha}
                                 </span>
-                                <span className="text-xs text-muted-foreground">
-                                  {fechaInfo.hora}
+                                <span className="text-sm font-bold text-purple-600 dark:text-purple-400">
+                                  🕐 {fechaInfo.hora} (Hora CR)
                                 </span>
                               </div>
                             );

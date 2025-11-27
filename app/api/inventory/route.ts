@@ -157,6 +157,22 @@ export async function POST(request: NextRequest) {
     // Importar función para actualizar inventario
     const { API_URLS } = await import('@/lib/config');
     
+    // La fecha_movimiento ya viene desde el frontend con la hora correcta
+    // Si no viene, usar la hora del servidor como fallback
+    const getCostaRicaTime = () => {
+      // Si el body ya tiene fecha_movimiento, usarla (viene del frontend)
+      if (body.fecha_movimiento) {
+        console.log('🕐 [API] Usando fecha_movimiento del frontend:', body.fecha_movimiento);
+        return body.fecha_movimiento;
+      }
+      
+      // Fallback: usar hora del servidor
+      const now = new Date();
+      const isoString = now.toISOString();
+      console.log('🕐 [API] Usando hora del servidor como fallback:', isoString);
+      return isoString;
+    };
+    
     // Preparar payload según tipo de operación - asegurar tipos correctos
     let payload: any;
     
@@ -167,6 +183,7 @@ export async function POST(request: NextRequest) {
         producto: String(body.producto || ''), // Sin trim para preservar espacios exactos
         tipo_operacion: 'eliminar',
         usuario: String(body.usuario || '').trim(),
+        fecha_movimiento: getCostaRicaTime(), // Agregar fecha/hora de Costa Rica
       };
       
       // Verificar que el payload tenga los campos requeridos
@@ -193,6 +210,7 @@ export async function POST(request: NextRequest) {
         stock_maximo: Number(body.stock_maximo),
         tipo_operacion: tipoOperacion,
         usuario: String(body.usuario).trim(),
+        fecha_movimiento: getCostaRicaTime(), // Agregar fecha/hora de Costa Rica
       };
       
       // Validar que los números sean válidos
