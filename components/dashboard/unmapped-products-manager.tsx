@@ -175,6 +175,24 @@ const extractNameWithoutParentheses = (name: string): string => {
   return name;
 };
 
+// Función para limpiar el nombre del producto para mostrarlo (remover cantidad)
+// Ejemplo: "(1 X OIL OREGANO)" -> "(OIL OREGANO)"
+// Ejemplo: "(2 X LEMME BURN)" -> "(LEMME BURN)"
+const cleanProductNameForDisplay = (name: string): string => {
+  if (!name.startsWith('(') || !name.endsWith(')')) {
+    return name; // Si no tiene paréntesis, devolver tal cual
+  }
+  
+  // Extraer contenido sin paréntesis
+  const content = name.slice(1, -1).trim();
+  
+  // Remover cantidad al inicio (ej: "1 X ", "2X ", "1X", etc.)
+  const cleanedContent = content.replace(/^\d+\s*[xX]\s*/i, '').trim();
+  
+  // Devolver con paréntesis
+  return `(${cleanedContent})`;
+};
+
 // Función para normalizar nombres de productos
 // Si el nombre tiene paréntesis, los removemos para la normalización
 const normalizeProductName = (name: string): string => {
@@ -925,7 +943,7 @@ export function UnmappedProductsManager({
                       <div className="flex items-center gap-2 mb-1">
                         <Package className="h-4 w-4 text-amber-600 shrink-0" />
                         <p className="font-semibold text-sm text-foreground truncate">
-                          {product.name}
+                          {cleanProductNameForDisplay(product.name)}
                         </p>
                       </div>
                       <div className="flex items-center gap-3 text-xs text-muted-foreground ml-6">
@@ -1039,7 +1057,7 @@ export function UnmappedProductsManager({
                 </DialogTitle>
                 <DialogDescription className="mt-0.5 text-xs">
                   {selectedUnmapped 
-                    ? `Mapear "${selectedUnmapped.name}" a un producto del inventario. Este mapeo se guardará automáticamente.`
+                    ? `Mapear "${cleanProductNameForDisplay(selectedUnmapped.name)}" a un producto del inventario. Este mapeo se guardará automáticamente.`
                     : 'Selecciona el producto real del inventario o crea uno nuevo'}
                 </DialogDescription>
               </div>
@@ -1051,7 +1069,7 @@ export function UnmappedProductsManager({
               {/* Producto no encontrado */}
               <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-3">
                 <p className="text-xs font-medium text-amber-900 mb-1">Producto No Encontrado</p>
-                <p className="font-semibold text-sm text-foreground">{selectedUnmapped.name}</p>
+                <p className="font-semibold text-sm text-foreground">{cleanProductNameForDisplay(selectedUnmapped.name)}</p>
                 <div className="mt-2 flex items-center gap-4 text-xs text-muted-foreground">
                   <span>{selectedUnmapped.occurrences} apariciones</span>
                   <span>•</span>
@@ -1101,7 +1119,7 @@ export function UnmappedProductsManager({
                             className="w-full justify-start gap-2 h-9 text-xs border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-700 font-medium"
                           >
                             <Plus className="h-3.5 w-3.5" />
-                            Crear nuevo producto: "{selectedUnmapped?.name || productSearchTerm || 'Nuevo Producto'}"
+                            Crear nuevo producto: "{selectedUnmapped ? cleanProductNameForDisplay(selectedUnmapped.name) : productSearchTerm || 'Nuevo Producto'}"
                           </Button>
                           <Button
                             type="button"
@@ -1114,7 +1132,7 @@ export function UnmappedProductsManager({
                             className="w-full justify-start gap-2 h-9 text-xs border-purple-200 bg-purple-50 hover:bg-purple-100 text-purple-700 font-medium"
                           >
                             <Layers className="h-3.5 w-3.5" />
-                            Crear combo: "{selectedUnmapped?.name || productSearchTerm || 'Nuevo Combo'}"
+                            Crear combo: "{selectedUnmapped ? cleanProductNameForDisplay(selectedUnmapped.name) : productSearchTerm || 'Nuevo Combo'}"
                           </Button>
                         </div>
                         
@@ -1158,7 +1176,7 @@ export function UnmappedProductsManager({
                 <div className="rounded-lg border border-green-200 bg-green-50/50 p-3">
                   <p className="text-xs font-medium text-green-900 mb-1">Mapeo</p>
                   <div className="flex items-center gap-2 text-sm">
-                    <span className="font-medium text-foreground">{selectedUnmapped.name}</span>
+                    <span className="font-medium text-foreground">{cleanProductNameForDisplay(selectedUnmapped.name)}</span>
                     <ArrowRight className="h-4 w-4 text-muted-foreground" />
                     <span className="font-semibold text-green-700">
                       {selectedMappedProduct}
@@ -1243,7 +1261,7 @@ export function UnmappedProductsManager({
                 </DialogTitle>
                 <DialogDescription className="mt-0.5 text-xs">
                   {selectedUnmapped 
-                    ? `Define el combo para "${selectedUnmapped.name}". Agrega productos del inventario con sus cantidades.`
+                    ? `Define el combo para "${cleanProductNameForDisplay(selectedUnmapped.name)}". Agrega productos del inventario con sus cantidades.`
                     : 'Define los productos y cantidades que incluye este combo'}
                 </DialogDescription>
               </div>
