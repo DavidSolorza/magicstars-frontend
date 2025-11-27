@@ -165,18 +165,18 @@ export const Sidebar = memo(function Sidebar({ onMobileMenuChange }: { onMobileM
             <Star className="w-5 h-5 text-white" />
           </div>
           <div className="flex-1 min-w-0">
-            {user.role === 'asesor' && user.company ? (
+            {user && user.role === 'asesor' && user.company ? (
               <h1 className="font-semibold text-sm text-slate-900 dark:text-slate-100 truncate">{user.company.name}</h1>
             ) : (
               <h1 className="font-semibold text-sm text-slate-900 dark:text-slate-100">Magic Stars</h1>
             )}
-            {user.role === 'asesor' && user.company ? (
+            {user && user.role === 'asesor' && user.company ? (
               <p className="text-xs text-slate-600 dark:text-slate-400 truncate">
                 Asesor
               </p>
             ) : (
               <p className="text-xs text-slate-600 dark:text-slate-400 capitalize">
-                {user.role === 'master' ? 'Master' : user.role}
+                {user && (user.role === 'master' ? 'Master' : user.role)}
               </p>
             )}
           </div>
@@ -272,8 +272,8 @@ export const Sidebar = memo(function Sidebar({ onMobileMenuChange }: { onMobileM
             <User className="w-4 h-4 text-white" />
           </div>
           <div className="flex-1 min-w-0 relative">
-            <p className="font-semibold text-sm text-slate-900 dark:text-slate-100 truncate">{user.name}</p>
-            <p className="text-xs text-slate-600 dark:text-slate-400 truncate">{user.email}</p>
+            <p className="font-semibold text-sm text-slate-900 dark:text-slate-100 truncate">{user?.name || 'Usuario'}</p>
+            <p className="text-xs text-slate-600 dark:text-slate-400 truncate">{user?.email || ''}</p>
           </div>
         </div>
         
