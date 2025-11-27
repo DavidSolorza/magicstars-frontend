@@ -20,9 +20,9 @@ import {
   Building2,
   Search,
   RefreshCw,
-  Settings,
   ArrowDown,
   ArrowUp,
+  ArrowUpDown,
   Info,
   CheckCircle2,
   Filter,
@@ -132,6 +132,10 @@ export default function AdminInventoryPage() {
   const [alertConfig, setAlertConfig] = useState<StockAlertConfig>({});
   const [alertConfigs, setAlertConfigs] = useState<Record<ProductKey, StockAlertConfig>>({});
   
+  // Estados para ajuste de stock en modal de configuración
+  const [stockEntrada, setStockEntrada] = useState<number>(0);
+  const [stockSalida, setStockSalida] = useState<number>(0);
+  
   // Estados para el modal de productos
   const [showProductModal, setShowProductModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<ProductoInventario | null>(null);
@@ -173,17 +177,23 @@ export default function AdminInventoryPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Función para abrir el modal de configuración
-  const handleOpenAlertConfig = (item: ProductoInventario) => {
+  // Función para abrir el modal combinado de ajuste de stock y configuración
+  const handleOpenStockAdjust = (item: ProductoInventario) => {
     const key = getProductKey(item.tienda, item.producto);
     const existingConfig = alertConfigs[key] || {};
     setSelectedProduct(item);
+    setEditingProduct(item);
     setAlertConfig({
       stockMinimo: existingConfig.stockMinimo ?? DEFAULT_MINIMUM_STOCK,
       stockMaximo: existingConfig.stockMaximo ?? DEFAULT_MAXIMUM_STOCK,
     });
+    setStockEntrada(0);
+    setStockSalida(0);
     setShowAlertConfigModal(true);
   };
+  
+  // Mantener handleOpenAlertConfig para compatibilidad
+  const handleOpenAlertConfig = handleOpenStockAdjust;
 
   // Función para guardar la configuración
   const handleSaveAlertConfig = () => {
@@ -882,20 +892,11 @@ export default function AdminInventoryPage() {
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => handleOpenAlertConfig(item)}
+                              onClick={() => handleOpenStockAdjust(item)}
                               className="h-8 w-8 p-0"
-                              title="Configurar alertas de stock"
+                              title="Ajustar stock y configurar alertas"
                             >
-                              <Settings className="h-4 w-4 text-muted-foreground hover:text-primary" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleEditProduct(item)}
-                              className="h-8 w-8 p-0"
-                              title="Editar producto"
-                            >
-                              <Edit className="h-4 w-4 text-muted-foreground hover:text-primary" />
+                              <ArrowUpDown className="h-4 w-4 text-muted-foreground hover:text-primary" />
                             </Button>
                             <Button
                               variant="ghost"
@@ -979,12 +980,12 @@ export default function AdminInventoryPage() {
           <DialogHeader className="pb-3">
             <div className="flex items-center gap-2.5">
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                <Settings className="h-4 w-4 text-primary" />
+                <ArrowUpDown className="h-4 w-4 text-primary" />
               </div>
               <div className="min-w-0 flex-1">
-                <DialogTitle className="text-lg leading-tight">Configurar Alertas de Stock</DialogTitle>
+                <DialogTitle className="text-lg leading-tight">Ajustar Stock y Configurar Alertas</DialogTitle>
                 <DialogDescription className="mt-0.5 text-xs">
-                  Define los umbrales personalizados
+                  Ajusta el stock y define los umbrales personalizados
                 </DialogDescription>
               </div>
             </div>
@@ -1104,6 +1105,109 @@ export default function AdminInventoryPage() {
                   </Badge>
                 </div>
               </div>
+
+              {/* Sección de Ajuste de Stock */}
+              <div className="rounded-lg border border-emerald-200/60 bg-emerald-50/50 p-3">
+                <div className="mb-3 flex items-center gap-2">
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-emerald-100">
+                    <Package className="h-3.5 w-3.5 text-emerald-600" />
+                  </div>
+                  <Label className="text-sm font-semibold">
+                    Ajuste de Stock
+                  </Label>
+                </div>
+                
+                {/* Stock Actual */}
+                <div className="mb-3 rounded bg-white p-2.5 border border-emerald-200">
+                  <p className="text-xs font-medium text-muted-foreground mb-1">Stock Actual</p>
+                  <p className="text-lg font-bold text-emerald-700">{selectedProduct.cantidad} unidades</p>
+                </div>
+
+                {/* Entrada de Stock */}
+                <div className="mb-3 space-y-1.5">
+                  <Label htmlFor="stock-entrada" className="text-xs font-medium text-emerald-700">
+                    Entrada (Cantidad que entra)
+                  </Label>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setStockEntrada(Math.max(0, stockEntrada - 1))}
+                      className="h-8 w-8 p-0"
+                    >
+                      <ArrowDown className="h-3.5 w-3.5" />
+                    </Button>
+                    <Input
+                      id="stock-entrada"
+                      type="number"
+                      min="0"
+                      value={stockEntrada}
+                      onChange={(e) => setStockEntrada(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                      className="h-8 text-center font-semibold text-emerald-700"
+                      placeholder="0"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setStockEntrada(stockEntrada + 1)}
+                      className="h-8 w-8 p-0"
+                    >
+                      <ArrowUp className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Salida de Stock */}
+                <div className="mb-3 space-y-1.5">
+                  <Label htmlFor="stock-salida" className="text-xs font-medium text-red-700">
+                    Salida (Cantidad que sale)
+                  </Label>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setStockSalida(Math.max(0, stockSalida - 1))}
+                      className="h-8 w-8 p-0"
+                    >
+                      <ArrowDown className="h-3.5 w-3.5" />
+                    </Button>
+                    <Input
+                      id="stock-salida"
+                      type="number"
+                      min="0"
+                      value={stockSalida}
+                      onChange={(e) => setStockSalida(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                      className="h-8 text-center font-semibold text-red-700"
+                      placeholder="0"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setStockSalida(stockSalida + 1)}
+                      className="h-8 w-8 p-0"
+                    >
+                      <ArrowUp className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Cantidad Final */}
+                <div className="rounded bg-emerald-100 p-2.5 border border-emerald-300">
+                  <p className="text-xs font-medium text-emerald-900 mb-1">Cantidad Final</p>
+                  <p className="text-xl font-bold text-emerald-900">
+                    {selectedProduct.cantidad + stockEntrada - stockSalida} unidades
+                  </p>
+                  {(stockEntrada > 0 || stockSalida > 0) && (
+                    <p className="text-[10px] text-emerald-700 mt-1">
+                      {selectedProduct.cantidad} {stockEntrada > 0 && `+ ${stockEntrada}`} {stockSalida > 0 && `- ${stockSalida}`} = {selectedProduct.cantidad + stockEntrada - stockSalida}
+                    </p>
+                  )}
+                </div>
+              </div>
             </div>
           )}
 
@@ -1126,9 +1230,25 @@ export default function AdminInventoryPage() {
               >
                 Cancelar
               </Button>
-              <Button onClick={handleSaveAlertConfig} className="h-9 flex-1 text-xs sm:flex-initial" size="sm">
+              <Button 
+                onClick={() => {
+                  handleSaveAlertConfig();
+                  // Si hay ajuste de stock, guardarlo también
+                  if (selectedProduct && (stockEntrada > 0 || stockSalida > 0)) {
+                    const nuevaCantidad = selectedProduct.cantidad + stockEntrada - stockSalida;
+                    handleSaveProduct({
+                      ...selectedProduct,
+                      cantidad: nuevaCantidad,
+                      stock_minimo: alertConfig.stockMinimo,
+                      stock_maximo: alertConfig.stockMaximo,
+                    });
+                  }
+                }} 
+                className="h-9 flex-1 text-xs sm:flex-initial" 
+                size="sm"
+              >
                 <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
-                Guardar
+                Guardar {stockEntrada > 0 || stockSalida > 0 ? 'y Aplicar Ajuste' : ''}
               </Button>
             </div>
           </DialogFooter>

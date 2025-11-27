@@ -22,22 +22,28 @@ import {
   Calendar,
   Loader2,
   Database,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { mockOrders } from '@/lib/mock-api';
 import { formatDistanceToNow, format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { cn } from '@/lib/utils';
 
 interface InventoryMovementsProps {
   productos: ProductoInventario[];
   limit?: number;
+  tiendaFilter?: string; // Filtrar movimientos por tienda (para asesor)
 }
 
-export function InventoryMovements({ productos, limit = 20 }: InventoryMovementsProps) {
+export function InventoryMovements({ productos, limit = 20, tiendaFilter }: InventoryMovementsProps) {
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [movimientosDB, setMovimientosDB] = useState<MovimientoInventario[]>([]);
   const [loadingMovimientosDB, setLoadingMovimientosDB] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reloadTrigger, setReloadTrigger] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 6;
 
   // Función helper para obtener fecha en zona horaria de Costa Rica (UTC-6)
   const getCostaRicaDate = (date?: Date) => {
@@ -171,6 +177,43 @@ export function InventoryMovements({ productos, limit = 20 }: InventoryMovements
           });
         }
         
+        // Filtrar por tienda si se proporciona el filtro (para asesor)
+        if (tiendaFilter && movimientosFiltrados.length > 0) {
+          const tiendaFilterNormalized = tiendaFilter.trim().toLowerCase();
+          movimientosFiltrados = movimientosFiltrados.filter((mov) => {
+            // Buscar el campo de tienda en el movimiento
+            const camposTienda = ['tienda', 'ubicacion', 'location', 'tienda_nombre', 'store', 'store_name'];
+            let tiendaMovimiento: string | null = null;
+            
+            for (const campo of camposTienda) {
+              if (mov[campo]) {
+                tiendaMovimiento = String(mov[campo]).trim().toLowerCase();
+                break;
+              }
+            }
+            
+            if (!tiendaMovimiento) return false;
+            
+            const coincide = tiendaMovimiento === tiendaFilterNormalized;
+            
+            if (!coincide) {
+              console.log('🔍 [Movimientos] Registro filtrado por tienda:', {
+                tienda_movimiento: mov.tienda || mov.ubicacion || mov.location,
+                tienda_filtro: tiendaFilter,
+                producto: mov.producto,
+              });
+            }
+            
+            return coincide;
+          });
+          
+          console.log('📋 [Movimientos] Filtrado por tienda:', {
+            total_antes_filtro_tienda: movimientos.length,
+            total_despues_filtro_tienda: movimientosFiltrados.length,
+            tienda_filtro: tiendaFilter,
+          });
+        }
+        
         setMovimientosDB(movimientosFiltrados);
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
@@ -183,6 +226,11 @@ export function InventoryMovements({ productos, limit = 20 }: InventoryMovements
     };
 
     loadMovimientos();
+  }, [selectedDate, reloadTrigger, tiendaFilter]);
+
+  // Resetear a página 1 cuando cambian los filtros o se recargan los datos
+  useEffect(() => {
+    setCurrentPage(1);
   }, [selectedDate, reloadTrigger]);
 
   // Función para convertir fecha UTC a zona horaria de Costa Rica
@@ -629,6 +677,12 @@ export function InventoryMovements({ productos, limit = 20 }: InventoryMovements
 
   const today = new Date().toISOString().split('T')[0];
 
+  // Paginación de movimientos
+  const totalPages = Math.ceil(movimientosDB.length / ITEMS_PER_PAGE);
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+  const endIndex = startIndex + ITEMS_PER_PAGE;
+  const paginatedMovimientos = movimientosDB.slice(startIndex, endIndex);
+
   return (
     <Card>
       <CardHeader className="space-y-4">
@@ -729,8 +783,8 @@ export function InventoryMovements({ productos, limit = 20 }: InventoryMovements
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {movimientosDB.map((movimiento, index) => (
-                  <TableRow key={movimiento.id || `row-${index}`}>
+                {paginatedMovimientos.map((movimiento, index) => (
+                  <TableRow key={movimiento.id || `row-${startIndex + index}`}>
                     {Object.keys(movimientosDB[0]).map((key) => {
                       const value = movimiento[key];
                       let displayValue: any = value;
@@ -810,6 +864,55 @@ export function InventoryMovements({ productos, limit = 20 }: InventoryMovements
                 ? `No se encontraron registros para la fecha seleccionada en la tabla inventario_control` 
                 : 'No hay registros en la tabla inventario_control'}
             </p>
+          </div>
+        )}
+        
+        {/* Paginación con puntos */}
+        {movimientosDB.length > 0 && totalPages > 1 && (
+          <div className="flex items-center justify-center gap-3 mt-6 pt-4 border-t">
+            <button
+              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+              disabled={currentPage === 1}
+              className={cn(
+                'p-1.5 rounded-md transition-all duration-200',
+                currentPage === 1
+                  ? 'opacity-30 cursor-not-allowed'
+                  : 'hover:bg-muted hover:scale-110 cursor-pointer'
+              )}
+              aria-label="Página anterior"
+            >
+              <ChevronLeft className="h-5 w-5 text-muted-foreground" />
+            </button>
+            
+            <div className="flex items-center gap-2">
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                <button
+                  key={page}
+                  onClick={() => setCurrentPage(page)}
+                  className={cn(
+                    'rounded-full transition-all duration-200',
+                    currentPage === page
+                      ? 'w-2.5 h-2.5 bg-primary scale-125'
+                      : 'w-2 h-2 border border-muted-foreground/30 hover:border-muted-foreground/50 bg-transparent'
+                  )}
+                  aria-label={`Ir a página ${page}`}
+                />
+              ))}
+            </div>
+            
+            <button
+              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+              disabled={currentPage === totalPages}
+              className={cn(
+                'p-1.5 rounded-md transition-all duration-200',
+                currentPage === totalPages
+                  ? 'opacity-30 cursor-not-allowed'
+                  : 'hover:bg-muted hover:scale-110 cursor-pointer'
+              )}
+              aria-label="Página siguiente"
+            >
+              <ChevronRight className="h-5 w-5 text-muted-foreground" />
+            </button>
           </div>
         )}
       </CardContent>

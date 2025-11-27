@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Package, Plus, Edit } from 'lucide-react';
+import { Package, Plus, Edit, ArrowUp, ArrowDown } from 'lucide-react';
 
 interface ProductFormModalProps {
   open: boolean;
@@ -48,6 +48,8 @@ export function ProductFormModal({
     stock_minimo: 5,
     stock_maximo: 20,
   });
+  const [stockEntrada, setStockEntrada] = useState<number>(0);
+  const [stockSalida, setStockSalida] = useState<number>(0);
 
   useEffect(() => {
     const defaultTienda = hideStoreField && defaultStore 
@@ -62,6 +64,8 @@ export function ProductFormModal({
         stock_minimo: 5,
         stock_maximo: 20,
       });
+      setStockEntrada(0);
+      setStockSalida(0);
     } else {
       setFormData({
         producto: '',
@@ -70,6 +74,8 @@ export function ProductFormModal({
         stock_minimo: 5,
         stock_maximo: 20,
       });
+      setStockEntrada(0);
+      setStockSalida(0);
     }
   }, [product, stores, hideStoreField, defaultStore]);
 
@@ -78,8 +84,15 @@ export function ProductFormModal({
     if (!formData.producto.trim()) {
       return;
     }
+    
+    // Calcular cantidad final si hay ajustes
+    const cantidadFinal = isEditing 
+      ? formData.cantidad + stockEntrada - stockSalida
+      : formData.cantidad;
+    
     onSave({
       ...formData,
+      cantidad: cantidadFinal,
       stock_minimo: formData.stock_minimo,
       stock_maximo: formData.stock_maximo,
     });
@@ -134,22 +147,136 @@ export function ProductFormModal({
             )}
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="cantidad" className="text-sm font-semibold">
-              Cantidad Inicial en Stock
-            </Label>
-            <Input
-              id="cantidad"
-              type="number"
-              min="0"
-              value={formData.cantidad}
-              onChange={(e) =>
-                setFormData({ ...formData, cantidad: parseInt(e.target.value, 10) || 0 })
-              }
-              placeholder="0"
-              className="h-9"
-            />
-          </div>
+          {isEditing ? (
+            <>
+              {/* Stock Actual (solo lectura cuando edita) */}
+              <div className="space-y-2">
+                <Label htmlFor="cantidad-actual" className="text-sm font-semibold">
+                  Stock Actual
+                </Label>
+                <Input
+                  id="cantidad-actual"
+                  type="number"
+                  value={formData.cantidad}
+                  className="h-9 bg-slate-50 cursor-not-allowed"
+                  disabled
+                  readOnly
+                />
+              </div>
+
+              {/* Sección de Ajuste de Stock */}
+              <div className="rounded-lg border border-emerald-200/60 bg-emerald-50/50 p-3 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Package className="h-4 w-4 text-emerald-600" />
+                  <Label className="text-sm font-semibold text-emerald-900">
+                    Ajuste de Stock
+                  </Label>
+                </div>
+
+                {/* Entrada de Stock */}
+                <div className="space-y-1.5">
+                  <Label htmlFor="stock-entrada" className="text-xs font-medium text-emerald-700">
+                    Entrada (Cantidad que entra)
+                  </Label>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setStockEntrada(Math.max(0, stockEntrada - 1))}
+                      className="h-8 w-8 p-0"
+                    >
+                      <ArrowDown className="h-3.5 w-3.5" />
+                    </Button>
+                    <Input
+                      id="stock-entrada"
+                      type="number"
+                      min="0"
+                      value={stockEntrada}
+                      onChange={(e) => setStockEntrada(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                      className="h-8 text-center font-semibold text-emerald-700"
+                      placeholder="0"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setStockEntrada(stockEntrada + 1)}
+                      className="h-8 w-8 p-0"
+                    >
+                      <ArrowUp className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Salida de Stock */}
+                <div className="space-y-1.5">
+                  <Label htmlFor="stock-salida" className="text-xs font-medium text-red-700">
+                    Salida (Cantidad que sale)
+                  </Label>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setStockSalida(Math.max(0, stockSalida - 1))}
+                      className="h-8 w-8 p-0"
+                    >
+                      <ArrowDown className="h-3.5 w-3.5" />
+                    </Button>
+                    <Input
+                      id="stock-salida"
+                      type="number"
+                      min="0"
+                      value={stockSalida}
+                      onChange={(e) => setStockSalida(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                      className="h-8 text-center font-semibold text-red-700"
+                      placeholder="0"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setStockSalida(stockSalida + 1)}
+                      className="h-8 w-8 p-0"
+                    >
+                      <ArrowUp className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Cantidad Final */}
+                <div className="rounded bg-emerald-100 p-2.5 border border-emerald-300">
+                  <p className="text-xs font-medium text-emerald-900 mb-1">Cantidad Final</p>
+                  <p className="text-xl font-bold text-emerald-900">
+                    {formData.cantidad + stockEntrada - stockSalida} unidades
+                  </p>
+                  {(stockEntrada > 0 || stockSalida > 0) && (
+                    <p className="text-[10px] text-emerald-700 mt-1">
+                      {formData.cantidad} {stockEntrada > 0 && `+ ${stockEntrada}`} {stockSalida > 0 && `- ${stockSalida}`} = {formData.cantidad + stockEntrada - stockSalida}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="space-y-2">
+              <Label htmlFor="cantidad" className="text-sm font-semibold">
+                Cantidad Inicial en Stock
+              </Label>
+              <Input
+                id="cantidad"
+                type="number"
+                min="0"
+                value={formData.cantidad}
+                onChange={(e) =>
+                  setFormData({ ...formData, cantidad: parseInt(e.target.value, 10) || 0 })
+                }
+                placeholder="0"
+                className="h-9"
+              />
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label htmlFor="stock_minimo" className="text-sm font-semibold">
