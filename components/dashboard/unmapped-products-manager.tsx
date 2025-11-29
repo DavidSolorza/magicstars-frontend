@@ -38,6 +38,7 @@ import {
   Layers,
   Trash2,
   Edit,
+  Loader2,
 } from 'lucide-react';
 import { ProductFormModal } from '@/components/dashboard/product-form-modal';
 import { Input } from '@/components/ui/input';
@@ -195,10 +196,15 @@ const cleanProductNameForDisplay = (name: string): string => {
 
 // Función para normalizar nombres de productos
 // Si el nombre tiene paréntesis, los removemos para la normalización
+// También removemos la cantidad al inicio para agrupar productos iguales con diferentes cantidades
 const normalizeProductName = (name: string): string => {
   // Remover paréntesis si existen para normalización
   const nameWithoutParens = extractNameWithoutParentheses(name);
-  return nameWithoutParens
+
+  // Remover cantidad al inicio (ej: "1 X ", "2X ", "1X", etc.)
+  const nameWithoutQuantity = nameWithoutParens.replace(/^\d+\s*[xX]\s*/i, '').trim();
+
+  return nameWithoutQuantity
     .toLowerCase()
     .trim()
     .replace(/\s+/g, ' ')
@@ -322,6 +328,8 @@ export function UnmappedProductsManager({
   const [comboProductSearchTerm, setComboProductSearchTerm] = useState<string>('');
   const [editingComboItemIndex, setEditingComboItemIndex] = useState<number | null>(null);
   const [editingComboItemQuantity, setEditingComboItemQuantity] = useState<number>(1);
+  const [isSavingMapping, setIsSavingMapping] = useState(false);
+  const [isSavingCombo, setIsSavingCombo] = useState(false);
   
   const ITEMS_PER_PAGE = 5;
 
@@ -431,6 +439,8 @@ export function UnmappedProductsManager({
   const handleSaveMapping = async () => {
     if (!selectedUnmapped || !selectedMappedProduct) return;
 
+    setIsSavingMapping(true);
+
     const normalized = normalizeProductName(selectedUnmapped.name);
 
     // Mapeo simple - siempre enviar al endpoint de diccionario
@@ -486,6 +496,8 @@ export function UnmappedProductsManager({
       }
     } catch (error) {
       console.error('❌ Error al enviar mapeo al diccionario:', error);
+    } finally {
+      setIsSavingMapping(false);
     }
 
     // Remover de la lista de no mapeados
@@ -565,7 +577,7 @@ export function UnmappedProductsManager({
     if (!comboName.trim()) {
       return;
     }
-    
+
     if (comboItems.length === 0) {
       return;
     }
@@ -577,6 +589,8 @@ export function UnmappedProductsManager({
     }
 
     if (!selectedUnmapped) return;
+
+    setIsSavingCombo(true);
 
     const comboId = `combo-${Date.now()}`;
     const combo: ProductCombo = {
@@ -596,7 +610,7 @@ export function UnmappedProductsManager({
     const normalized = normalizeProductName(selectedUnmapped.name);
     const comboMappingName = `COMBO:${combo.name}`;
     saveMapping(selectedUnmapped.name, comboMappingName, true, comboId);
-    
+
     setSavedMappings(prev => ({
       ...prev,
       [normalized]: comboMappingName,
@@ -615,8 +629,8 @@ export function UnmappedProductsManager({
         .join(', ');
 
       const payload = {
-        combo_existente: nombreSinCantidad, // Producto no encontrado sin cantidad ni paréntesis
-        combo_nuevo: comboNuevoString, // String con formato "1 X PRODUCTO1, 3 X PRODUCTO2"
+        nombre_combo: nombreSinCantidad, // Producto no encontrado sin cantidad ni paréntesis
+        productos_combo: comboNuevoString, // String con formato "1 X PRODUCTO1, 3 X PRODUCTO2"
       };
 
       console.log('📤 Enviando combo al diccionario:', {
@@ -624,12 +638,12 @@ export function UnmappedProductsManager({
         payload,
         detalle: {
           producto_original_completo: selectedUnmapped.name,
-          producto_sin_cantidad: nombreSinCantidad,
-          combo_string: comboNuevoString,
+          nombre_combo: nombreSinCantidad,
+          productos_combo: comboNuevoString,
           items: comboItems,
         },
       });
-      
+
       const response = await fetch(API_URLS.ADD_DICCIONARIO_COMBOS, {
         method: 'POST',
         headers: {
@@ -651,6 +665,8 @@ export function UnmappedProductsManager({
       }
     } catch (error) {
       console.error('❌ Error al enviar combo al diccionario:', error);
+    } finally {
+      setIsSavingCombo(false);
     }
 
     // Remover de la lista de no mapeados
@@ -1106,21 +1122,8 @@ export function UnmappedProductsManager({
                         </div>
                       </div>
                       <div className="max-h-[300px] overflow-y-auto">
-                        {/* Opción para crear nuevo producto */}
-                        <div className="p-2 border-b bg-blue-50/50 space-y-1.5">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleCreateProduct();
-                            }}
-                            className="w-full justify-start gap-2 h-9 text-xs border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-700 font-medium"
-                          >
-                            <Plus className="h-3.5 w-3.5" />
-                            Crear nuevo producto: "{selectedUnmapped ? cleanProductNameForDisplay(selectedUnmapped.name) : productSearchTerm || 'Nuevo Producto'}"
-                          </Button>
+                        {/* Opción para crear combo */}
+                        <div className="p-2 border-b bg-purple-50/50">
                           <Button
                             type="button"
                             variant="outline"
@@ -1201,17 +1204,22 @@ export function UnmappedProductsManager({
               onClick={() => setShowMappingDialog(false)}
               className="h-9 w-full text-xs sm:w-auto"
               size="sm"
+              disabled={isSavingMapping}
             >
               Cancelar
             </Button>
             <Button
               onClick={handleSaveMapping}
-              disabled={!selectedMappedProduct}
+              disabled={!selectedMappedProduct || isSavingMapping}
               className="h-9 w-full text-xs sm:w-auto"
               size="sm"
             >
-              <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
-              Guardar Mapeo
+              {isSavingMapping ? (
+                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
+              )}
+              {isSavingMapping ? 'Guardando...' : 'Guardar Mapeo'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1312,22 +1320,6 @@ export function UnmappedProductsManager({
                           onKeyDown={(e) => e.stopPropagation()}
                         />
                       </div>
-                    </div>
-                    {/* Opción para crear nuevo producto */}
-                    <div className="p-2 border-b bg-blue-50/50">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleCreateProductFromCombo();
-                        }}
-                        className="w-full justify-start gap-2 h-9 text-xs border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-700 font-medium"
-                      >
-                        <Plus className="h-3.5 w-3.5" />
-                        Crear nuevo producto
-                      </Button>
                     </div>
                     <div className="max-h-[250px] overflow-y-auto">
                       {availableComboProducts.length === 0 ? (
@@ -1521,17 +1513,22 @@ export function UnmappedProductsManager({
               onClick={() => setShowComboModal(false)}
               className="h-9 w-full text-xs sm:w-auto"
               size="sm"
+              disabled={isSavingCombo}
             >
               Cancelar
             </Button>
             <Button
               onClick={handleSaveCombo}
-              disabled={!comboName.trim() || comboItems.length === 0}
+              disabled={!comboName.trim() || comboItems.length === 0 || isSavingCombo}
               className="h-9 w-full text-xs sm:w-auto"
               size="sm"
             >
-              <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
-              Guardar Combo
+              {isSavingCombo ? (
+                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
+              )}
+              {isSavingCombo ? 'Guardando...' : 'Guardar Combo'}
             </Button>
           </DialogFooter>
         </DialogContent>

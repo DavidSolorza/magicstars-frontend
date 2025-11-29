@@ -1394,9 +1394,11 @@ export default function AsesorDashboard() {
           onMappingSaved={() => {
             toast({
               title: '✅ Mapeo guardado',
-              description: 'El producto ha sido mapeado correctamente y se aplicará en futuros pedidos.',
+              description: 'El producto ha sido mapeado correctamente. Actualizando pedidos...',
               variant: 'default',
             });
+            // Recargar los pedidos desde la base de datos para reflejar los cambios
+            loadData();
           }}
           onInventoryUpdate={(newProduct) => {
             // Agregar el nuevo producto al inventario local

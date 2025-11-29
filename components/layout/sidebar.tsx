@@ -58,7 +58,7 @@ const menuItems = {
   ],
   asesor: [
     { icon: LayoutDashboard, label: 'Dashboard', href: '/dashboard/asesor' },
-    { icon: Package, label: 'Pedidos Sin Confirmar', href: '/dashboard/asesor/pedidos-sin-confirmar' },
+    // { icon: Package, label: 'Pedidos Sin Confirmar', href: '/dashboard/asesor/pedidos-sin-confirmar' },
     { icon: Warehouse, label: 'Inventario', href: '/dashboard/asesor/inventory' },
     { icon: Network, label: 'Logística Externa', href: '/dashboard/asesor/red-logistic' },
     // { icon: BarChart3, label: 'Estadísticas', href: '/dashboard/asesor/stats' },
