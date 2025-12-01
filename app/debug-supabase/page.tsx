@@ -7,18 +7,18 @@ export default async function DebugSupabasePage() {
 
   // 1. Probar conexión básica
   const { data: connectionTest, error: connectionError } = await supabase
-    .from('pedidos')
+    .from('pedidos_auto_test')
     .select('count', { count: 'exact', head: true })
 
   // 2. Probar consulta simple
   const { data: pedidos, error: pedidosError } = await supabase
-    .from('pedidos')
+    .from('pedidos_auto_test')
     .select('*')
     .limit(5)
 
   // 3. Probar consulta con filtro
   const { data: pedidosConFiltro, error: filtroError } = await supabase
-    .from('pedidos')
+    .from('pedidos_auto_test')
     .select('id_pedido, distrito, valor_total')
     .limit(3)
 

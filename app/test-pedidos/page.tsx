@@ -7,7 +7,7 @@ export default async function TestPedidosPage() {
   const supabase = createClient(cookieStore)
 
   const { data: pedidos, error } = await supabase
-    .from('pedidos')
+    .from('pedidos_auto_test')
     .select('*')
 
   if (error) {

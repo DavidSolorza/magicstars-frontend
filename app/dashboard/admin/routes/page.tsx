@@ -234,7 +234,7 @@ export default function AdminRoutesPage() {
 
       // Consultar todos los pedidos sin mensajero asignado
       const { data, error } = await supabasePedidos
-        .from('pedidos')
+        .from('pedidos_auto_test')
         .select('*')
         .is('mensajero_asignado', null)
         .in('estado_pedido', ['PENDIENTE', 'CONFIRMADO', 'REAGENDADO'])

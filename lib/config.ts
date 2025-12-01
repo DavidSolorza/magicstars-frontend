@@ -42,7 +42,7 @@ export const API_ENDPOINTS = {
   // Gestión de Rutas
   ROUTES: {
     GENERAR_RUTAS: '/webhook/generar_rutas',
-    ASIGNAR_PEDIDO_INDIVIDUAL: '/webhook/Asignar-Pedido-Individual',
+    ASIGNAR_PEDIDO_INDIVIDUAL: '/webhook/Asignar-Pedido-Individual-Nuevo',
     REASIGNAR_PEDIDOS_MENSAJERO: '/webhook/reasignar-pedidos-de-un-mensajero-a-otro',
   },
 

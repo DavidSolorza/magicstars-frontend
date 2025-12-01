@@ -1039,6 +1039,15 @@ export default function AdvisorInventoryPage() {
                                   <Button
                                     variant="ghost"
                                     size="sm"
+                                    onClick={() => handleEditProduct(producto)}
+                                    className="h-8 w-8 p-0"
+                                    title="Editar producto"
+                                  >
+                                    <Edit className="h-4 w-4 text-muted-foreground hover:text-primary" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
                                     onClick={() => handleOpenStockAdjust(producto)}
                                     className="h-8 w-8 p-0"
                                     title="Ajustar stock y configurar alertas"

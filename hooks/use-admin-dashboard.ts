@@ -301,7 +301,7 @@ export function useAdminDashboard() {
           setLoaderStepStatus('fetch-all', 'loading', `Obteniendo página ${page}...`);
 
           const { data, error } = await supabasePedidos
-            .from('pedidos')
+            .from('pedidos_auto_test')
             .select('*')
             .order('fecha_creacion', { ascending: false })
             .range(from, from + pageLimit - 1);

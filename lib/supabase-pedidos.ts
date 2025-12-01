@@ -14,7 +14,7 @@ export const getPedidos = async (page: number = 1, pageSize: number = 50): Promi
 
     // Obtener el conteo total primero
     const { count, error: countError } = await supabasePedidos
-      .from('pedidos')
+      .from('pedidos_auto_test')
       .select('*', { count: 'exact', head: true });
 
     if (countError) {
@@ -27,7 +27,7 @@ export const getPedidos = async (page: number = 1, pageSize: number = 50): Promi
 
     // Obtener los datos de la página actual
     const { data, error } = await supabasePedidos
-      .from('pedidos')
+      .from('pedidos_auto_test')
       .select('*')
       .order('fecha_creacion', { ascending: false }) // Ordenar por fecha más reciente primero
       .range(from, to);
@@ -66,7 +66,7 @@ export const getAllPedidos = async (): Promise<PedidoTest[]> => {
       console.log(`📄 Obteniendo página ${Math.floor(from / pageLimit) + 1}...`);
       
       const { data, error } = await supabasePedidos
-        .from('pedidos')
+        .from('pedidos_auto_test')
         .select('*')
         .order('fecha_creacion', { ascending: false })
         .range(from, from + pageLimit - 1);
@@ -98,7 +98,7 @@ export const getAllPedidos = async (): Promise<PedidoTest[]> => {
 export const getPedidosByDistrito = async (distrito: string): Promise<PedidoTest[]> => {
   try {
     const { data, error } = await supabasePedidos
-      .from('pedidos')
+      .from('pedidos_auto_test')
       .select('*')
       .eq('distrito', distrito);
 
@@ -118,7 +118,7 @@ export const getPedidosByDistrito = async (distrito: string): Promise<PedidoTest
 export const getPedidoById = async (id: string): Promise<PedidoTest | null> => {
   try {
     const { data, error } = await supabasePedidos
-      .from('pedidos')
+      .from('pedidos_auto_test')
       .select('*')
       .eq('id_pedido', id)
       .single();
@@ -145,7 +145,7 @@ export const getPedidosByMensajero = async (mensajeroName: string): Promise<Pedi
     
     // Buscar pedidos donde el mensajero esté asignado O concretado (insensible a mayúsculas)
     const { data, error } = await supabasePedidos
-      .from('pedidos')
+      .from('pedidos_auto_test')
       .select('*')
       .or(`mensajero_asignado.ilike.${mensajeroName},mensajero_concretado.ilike.${mensajeroName}`);
 
@@ -165,7 +165,7 @@ export const getPedidosByMensajero = async (mensajeroName: string): Promise<Pedi
       console.log('🔄 Obteniendo todos los pedidos para testing...');
       
       const { data: allData, error: allError } = await supabasePedidos
-        .from('pedidos')
+        .from('pedidos_auto_test')
         .select('*')
         .limit(10); // Limitar a 10 pedidos para testing
       
@@ -265,7 +265,7 @@ export const getPedidosByFecha = async (fecha: string): Promise<PedidoTest[]> =>
       console.log(`📄 Obteniendo página ${Math.floor(from / limit) + 1} (registros ${from} a ${from + limit - 1})...`);
       
       const { data, error } = await supabasePedidos
-        .from('pedidos')
+        .from('pedidos_auto_test')
         .select('*')
         .eq('fecha_creacion', fecha)
         .range(from, from + limit - 1)
@@ -373,7 +373,7 @@ export const getPedidosDelDiaByMensajero = async (mensajeroName: string, fecha?:
         
         // Probar consulta simple con eq
         const { data: testData, error: testError } = await supabasePedidos
-          .from('pedidos')
+          .from('pedidos_auto_test')
           .select('id_pedido, fecha_creacion, mensajero_asignado, mensajero_concretado')
           .or(`mensajero_asignado.ilike.${mensajeroName},mensajero_concretado.ilike.${mensajeroName}`)
           .eq('fecha_creacion', targetDate)
@@ -394,7 +394,7 @@ export const getPedidosDelDiaByMensajero = async (mensajeroName: string, fecha?:
       console.log('🔍 Usando solo fecha (sin hora):', targetDate);
       
       const { data, error } = await supabasePedidos
-        .from('pedidos')
+        .from('pedidos_auto_test')
         .select('*')
         .or(`mensajero_asignado.ilike.${mensajeroName},mensajero_concretado.ilike.${mensajeroName}`)
         .eq('fecha_creacion', targetDate)
@@ -454,7 +454,7 @@ export const testBusquedaAnibal = async (): Promise<void> => {
     console.log('🧪 PRUEBA: Buscando específicamente por "Anibal"...');
     
     const { data, error } = await supabasePedidos
-      .from('pedidos')
+      .from('pedidos_auto_test')
       .select('id_pedido, mensajero_asignado, mensajero_concretado, fecha_creacion, cliente_nombre')
       .or('mensajero_asignado.ilike.Anibal,mensajero_concretado.ilike.Anibal')
       .limit(10);
@@ -477,7 +477,7 @@ export const buscarPedidosEspecificos = async (): Promise<void> => {
     
     // Buscar VT5851
     const { data: vt5851, error: error1 } = await supabasePedidos
-      .from('pedidos')
+      .from('pedidos_auto_test')
       .select('*')
       .eq('id_pedido', 'VT5851');
 
@@ -488,7 +488,7 @@ export const buscarPedidosEspecificos = async (): Promise<void> => {
 
     // Buscar WS3057
     const { data: ws3057, error: error2 } = await supabasePedidos
-      .from('pedidos')
+      .from('pedidos_auto_test')
       .select('*')
       .eq('id_pedido', 'WS3057');
 
@@ -500,7 +500,7 @@ export const buscarPedidosEspecificos = async (): Promise<void> => {
     // Buscar por fecha 2025-09-17
     console.log('🔍 BUSCANDO TODOS LOS PEDIDOS DEL 2025-09-17...');
     const { data: pedidosFecha, error: error3 } = await supabasePedidos
-      .from('pedidos')
+      .from('pedidos_auto_test')
       .select('id_pedido, mensajero_asignado, mensajero_concretado, fecha_creacion, cliente_nombre')
       .eq('fecha_creacion', '2025-09-17')
       .limit(20);
@@ -522,13 +522,13 @@ export const debugMensajeros = async (): Promise<void> => {
     
     // Obtener nombres únicos de mensajero_asignado
     const { data: asignados, error: errorAsignados } = await supabasePedidos
-      .from('pedidos')
+      .from('pedidos_auto_test')
       .select('mensajero_asignado')
       .not('mensajero_asignado', 'is', null);
     
     // Obtener nombres únicos de mensajero_concretado
     const { data: concretados, error: errorConcretados } = await supabasePedidos
-      .from('pedidos')
+      .from('pedidos_auto_test')
       .select('mensajero_concretado')
       .not('mensajero_concretado', 'is', null);
 
@@ -549,7 +549,7 @@ export const debugMensajeros = async (): Promise<void> => {
     // Buscar específicamente pedidos con "Anibal" para debug
     console.log('🔍 DEBUG: Buscando pedidos específicos con "Anibal"...');
     const { data: pedidosAnibal, error: errorAnibal } = await supabasePedidos
-      .from('pedidos')
+      .from('pedidos_auto_test')
       .select('id_pedido, mensajero_asignado, mensajero_concretado, fecha_creacion')
       .or('mensajero_asignado.ilike.Anibal,mensajero_concretado.ilike.Anibal')
       .limit(5);
@@ -570,7 +570,7 @@ export const getTotalPedidosCount = async (): Promise<number> => {
     console.log('🔢 Obteniendo conteo total de pedidos...');
     
     const { count, error } = await supabasePedidos
-      .from('pedidos')
+      .from('pedidos_auto_test')
       .select('*', { count: 'exact', head: true });
 
     if (error) {
@@ -595,7 +595,7 @@ export const getPedidosCountByTienda = async (tienda: string, fecha?: string): P
     console.log('📅 Fecha objetivo:', targetDate);
     
     const { count, error } = await supabasePedidos
-      .from('pedidos')
+      .from('pedidos_auto_test')
       .select('*', { count: 'exact', head: true })
       .eq('tienda', tienda)
       .eq('fecha_creacion', targetDate);
@@ -619,7 +619,7 @@ export const updatePedido = async (id: string, updates: Partial<PedidoTest>): Pr
     console.log(`🔄 Actualizando pedido ${id} con datos:`, updates);
 
     const { error } = await supabasePedidos
-      .from('pedidos')
+      .from('pedidos_auto_test')
       .update(updates)
       .eq('id_pedido', id);
 
@@ -656,7 +656,7 @@ export const getPedidosByDateRange = async (tienda: string, fechaInicio: Date, f
       console.log(`📄 Obteniendo página ${Math.floor(from / limit) + 1} (registros ${from} a ${from + limit - 1})...`);
       
       const { data, error } = await supabasePedidos
-        .from('pedidos')
+        .from('pedidos_auto_test')
         .select('*')
         .eq('tienda', tienda)
         .gte('fecha_creacion', fechaInicioISO)
@@ -719,7 +719,7 @@ export const getAllPedidosByTienda = async (tienda: string): Promise<PedidoTest[
       console.log(`📄 Obteniendo página ${Math.floor(from / limit) + 1} (registros ${from} a ${from + limit - 1})...`);
       
       const { data, error } = await supabasePedidos
-        .from('pedidos')
+        .from('pedidos_auto_test')
         .select('*')
         .eq('tienda', tienda)
         .range(from, from + limit - 1)
@@ -755,7 +755,7 @@ export const getMensajerosUnicos = async (): Promise<string[]> => {
     
     // Primero verificar si hay datos en la tabla
     const { data: totalPedidos, error: errorTotal } = await supabasePedidos
-      .from('pedidos')
+      .from('pedidos_auto_test')
       .select('id_pedido, mensajero_asignado, mensajero_concretado, fecha_creacion')
       .limit(5);
     
@@ -764,13 +764,13 @@ export const getMensajerosUnicos = async (): Promise<string[]> => {
     
     // Obtener nombres únicos de mensajero_asignado
     const { data: asignados, error: errorAsignados } = await supabasePedidos
-      .from('pedidos')
+      .from('pedidos_auto_test')
       .select('mensajero_asignado')
       .not('mensajero_asignado', 'is', null);
     
     // Obtener nombres únicos de mensajero_concretado
     const { data: concretados, error: errorConcretados } = await supabasePedidos
-      .from('pedidos')
+      .from('pedidos_auto_test')
       .select('mensajero_concretado')
       .not('mensajero_concretado', 'is', null);
 
@@ -825,7 +825,7 @@ export const getPedidosDelDiaByMensajeroEspecifico = async (mensajeroName: strin
       // CORRECCIÓN: Usar comillas alrededor del valor en la consulta .or() con .ilike
       // La sintaxis correcta para PostgREST es: campo.ilike."valor"
       const { data, error } = await supabasePedidos
-        .from('pedidos')
+        .from('pedidos_auto_test')
         .select('*')
         .or(`mensajero_asignado.ilike."${mensajeroNormalizado}",mensajero_concretado.ilike."${mensajeroNormalizado}"`)
         .eq('fecha_creacion', fecha) // Usar eq en lugar de gte/lt
@@ -839,7 +839,7 @@ export const getPedidosDelDiaByMensajeroEspecifico = async (mensajeroName: strin
         if (error.message?.includes('syntax') || error.code === 'PGRST116') {
           console.log('🔄 Intentando sin comillas...');
           const { data: dataRetry, error: errorRetry } = await supabasePedidos
-            .from('pedidos')
+            .from('pedidos_auto_test')
             .select('*')
             .or(`mensajero_asignado.ilike.${mensajeroNormalizado},mensajero_concretado.ilike.${mensajeroNormalizado}`)
             .eq('fecha_creacion', fecha)
@@ -893,7 +893,7 @@ export const getPedidosDelDia = async (fecha: string = getCostaRicaDateISO()) =>
 
     while (hasMore) {
       const { data, error } = await supabasePedidos
-        .from('pedidos')
+        .from('pedidos_auto_test')
         .select('*')
         .eq('fecha_creacion', fecha)
         .order('fecha_creacion', { ascending: false })
@@ -926,7 +926,7 @@ export const getPedidosDelDia = async (fecha: string = getCostaRicaDateISO()) =>
       console.warn('⚠️ [DEBUG] NO SE ENCONTRARON PEDIDOS para la fecha:', fecha);
       // Intentar verificar si hay pedidos en otras fechas cercanas
       const { data: testData } = await supabasePedidos
-        .from('pedidos')
+        .from('pedidos_auto_test')
         .select('fecha_creacion')
         .order('fecha_creacion', { ascending: false })
         .limit(5);
@@ -972,7 +972,7 @@ export const getLiquidacionesReales = async (fecha: string): Promise<{
     // MEJORA: Obtener mensajeros únicos de la fecha específica primero
     // Esto asegura que todos los mensajeros con pedidos en esta fecha aparezcan
     const { data: pedidosFecha, error: errorPedidosFecha } = await supabasePedidos
-      .from('pedidos')
+      .from('pedidos_auto_test')
       .select('mensajero_asignado, mensajero_concretado')
       .eq('fecha_creacion', fecha);
     
@@ -1164,7 +1164,7 @@ export const debugMensajeroQueries = async (mensajeroName: string) => {
     
     // 1. Verificar si el mensajero existe en la tabla
     const { data: mensajeroExists, error: errorExists } = await supabasePedidos
-      .from('pedidos')
+      .from('pedidos_auto_test')
       .select('mensajero_asignado, mensajero_concretado')
       .or(`mensajero_asignado.ilike.${mensajeroName},mensajero_concretado.ilike.${mensajeroName}`)
       .limit(5);
@@ -1175,7 +1175,7 @@ export const debugMensajeroQueries = async (mensajeroName: string) => {
     
     // 2. Verificar fechas disponibles para este mensajero
     const { data: fechasMensajero, error: errorFechas } = await supabasePedidos
-      .from('pedidos')
+      .from('pedidos_auto_test')
       .select('fecha_creacion')
       .or(`mensajero_asignado.ilike.${mensajeroName},mensajero_concretado.ilike.${mensajeroName}`)
       .not('fecha_creacion', 'is', null)
@@ -1191,7 +1191,7 @@ export const debugMensajeroQueries = async (mensajeroName: string) => {
     console.log(`📅 Probando con fecha actual: ${fechaActual}`);
     
     const { data: pedidosHoy, error: errorHoy } = await supabasePedidos
-      .from('pedidos')
+      .from('pedidos_auto_test')
       .select('id_pedido, fecha_creacion, mensajero_asignado, mensajero_concretado, estado_pedido')
       .or(`mensajero_asignado.ilike.${mensajeroName},mensajero_concretado.ilike.${mensajeroName}`)
       .gte('fecha_creacion', `${fechaActual}T00:00:00`)
@@ -1215,7 +1215,7 @@ export const debugMensajeroQueries = async (mensajeroName: string) => {
       console.log(`🔍 Probando variación: "${variacion}"`);
       
       const { data: pedidosVariacion, error: errorVariacion } = await supabasePedidos
-        .from('pedidos')
+        .from('pedidos_auto_test')
         .select('id_pedido, mensajero_asignado, mensajero_concretado')
         .or(`mensajero_asignado.ilike.${variacion},mensajero_concretado.ilike.${variacion}`)
         .limit(3);
@@ -1248,7 +1248,7 @@ export const debugHenryPedidos = async (fechaEspecifica?: string) => {
     
     // 2. Buscar pedidos de Henry sin filtro de fecha primero
     const { data: pedidosHenryTodos, error: errorTodos } = await supabasePedidos
-      .from('pedidos')
+      .from('pedidos_auto_test')
       .select('id_pedido, fecha_creacion, mensajero_asignado, mensajero_concretado, estado_pedido, valor_total')
       .or(`mensajero_asignado.ilike.HENRY,mensajero_concretado.ilike.HENRY`)
       .limit(20)
@@ -1287,7 +1287,7 @@ export const debugHenryPedidos = async (fechaEspecifica?: string) => {
       
       // Probar con eq
       const { data: pedidosEq, error: errorEq } = await supabasePedidos
-        .from('pedidos')
+        .from('pedidos_auto_test')
         .select('id_pedido, fecha_creacion, mensajero_asignado, mensajero_concretado, estado_pedido, valor_total')
         .or(`mensajero_asignado.ilike.HENRY,mensajero_concretado.ilike.HENRY`)
         .eq('fecha_creacion', fechaVariacion)
@@ -1302,7 +1302,7 @@ export const debugHenryPedidos = async (fechaEspecifica?: string) => {
       const fechaInicio = `${fechaVariacion.split('T')[0]}T00:00:00`;
       const fechaFin = `${fechaVariacion.split('T')[0]}T23:59:59`;
       const { data: pedidosRango, error: errorRango } = await supabasePedidos
-        .from('pedidos')
+        .from('pedidos_auto_test')
         .select('id_pedido, fecha_creacion, mensajero_asignado, mensajero_concretado, estado_pedido, valor_total')
         .or(`mensajero_asignado.ilike.HENRY,mensajero_concretado.ilike.HENRY`)
         .gte('fecha_creacion', fechaInicio)
@@ -1342,7 +1342,7 @@ export const debugFechasConDatos = async () => {
     
     // Obtener todas las fechas únicas en la tabla
     const { data: fechasUnicas, error: errorFechas } = await supabasePedidos
-      .from('pedidos')
+      .from('pedidos_auto_test')
       .select('fecha_creacion')
       .not('fecha_creacion', 'is', null)
       .order('fecha_creacion', { ascending: false })
@@ -1364,7 +1364,7 @@ export const debugFechasConDatos = async () => {
       console.log(`\n🔍 Probando fecha: ${fecha}`);
       
       const { data: pedidosFecha, error: errorPedidos } = await supabasePedidos
-        .from('pedidos')
+        .from('pedidos_auto_test')
         .select('id_pedido, fecha_creacion, mensajero_asignado, mensajero_concretado, estado_pedido, valor_total')
         .gte('fecha_creacion', `${fecha}T00:00:00`)
         .lt('fecha_creacion', `${fecha}T23:59:59`)
@@ -1399,7 +1399,7 @@ export const debugTablaPedidos = async (fecha: string) => {
     
     // Verificar total de pedidos en la tabla
     const { data: totalPedidos, error: errorTotal } = await supabasePedidos
-      .from('pedidos')
+      .from('pedidos_auto_test')
       .select('id_pedido, mensajero_asignado, mensajero_concretado, fecha_creacion, estado_pedido, valor_total, metodo_pago')
       .limit(10);
     
@@ -1408,7 +1408,7 @@ export const debugTablaPedidos = async (fecha: string) => {
     
     // Verificar pedidos para la fecha específica
     const { data: pedidosFecha, error: errorFecha } = await supabasePedidos
-      .from('pedidos')
+      .from('pedidos_auto_test')
       .select('id_pedido, mensajero_asignado, mensajero_concretado, fecha_creacion, estado_pedido, valor_total, metodo_pago')
       .eq('fecha_creacion', fecha)
       .limit(10);
@@ -1418,7 +1418,7 @@ export const debugTablaPedidos = async (fecha: string) => {
     
     // Verificar mensajeros únicos en la fecha
     const { data: mensajerosFecha, error: errorMensajeros } = await supabasePedidos
-      .from('pedidos')
+      .from('pedidos_auto_test')
       .select('mensajero_asignado, mensajero_concretado')
       .eq('fecha_creacion', fecha)
       .not('mensajero_asignado', 'is', null);
@@ -1567,7 +1567,7 @@ export const getTiendasUnicas = async (): Promise<string[]> => {
       console.log('⚠️ La tabla tiendas está vacía, usando pedidos como fallback...');
     }
     const { data: pedidosData, error: pedidosError } = await supabasePedidos
-      .from('pedidos')
+      .from('pedidos_auto_test')
       .select('tienda')
       .not('tienda', 'is', null)
       .not('tienda', 'eq', '')
@@ -1611,7 +1611,7 @@ export const getPedidosDelDiaByTiendaEspecifica = async (tiendaName: string, fec
 
     while (hasMore) {
       const { data, error } = await supabasePedidos
-        .from('pedidos')
+        .from('pedidos_auto_test')
         .select('*')
         .ilike('tienda', tiendaName)
         .eq('fecha_creacion', fecha)
@@ -1680,7 +1680,7 @@ export const getLiquidacionesRealesByTienda = async (fecha: string): Promise<{
     
     // Obtener tiendas únicas que tengan pedidos en la fecha específica
     const { data: tiendasData, error: tiendasError } = await supabasePedidos
-      .from('pedidos')
+      .from('pedidos_auto_test')
       .select('tienda')
       .eq('fecha_creacion', fecha)
       .not('tienda', 'is', null)
@@ -1868,7 +1868,7 @@ export const crearPedidoTienda = async (pedidoData: Omit<PedidoTest, 'id_pedido'
     };
 
     const { data, error } = await supabasePedidos
-      .from('pedidos')
+      .from('pedidos_auto_test')
       .insert([nuevoPedido])
       .select()
       .single();
@@ -1892,7 +1892,7 @@ export const confirmarPedidoTienda = async (pedidoId: string, usuario: string): 
     console.log(`✅ Confirmando pedido ${pedidoId} por usuario: ${usuario}`);
 
     const { error } = await supabasePedidos
-      .from('pedidos')
+      .from('pedidos_auto_test')
       .update({ 
         estado_pedido: 'confirmado',
         nota_asesor: `Confirmado por ${usuario} el ${new Date().toLocaleString('es-CR')}`
@@ -1922,7 +1922,7 @@ export const desconfirmarPedidoTienda = async (pedidoId: string, usuario: string
       : `Desconfirmado por ${usuario} el ${new Date().toLocaleString('es-CR')}`;
 
     const { error } = await supabasePedidos
-      .from('pedidos')
+      .from('pedidos_auto_test')
       .update({ 
         estado_pedido: 'pendiente',
         nota_asesor: nota
@@ -1952,7 +1952,7 @@ export const eliminarPedidoTienda = async (pedidoId: string, usuario: string, mo
       : `Eliminado por ${usuario} el ${new Date().toLocaleString('es-CR')}`;
 
     const { error } = await supabasePedidos
-      .from('pedidos')
+      .from('pedidos_auto_test')
       .update({ 
         estado_pedido: 'eliminado',
         nota_asesor: nota
@@ -1999,7 +1999,7 @@ export const getLiquidacionTienda = async (tiendaName: string, fecha?: string): 
     
     // Obtener todos los pedidos para la fecha específica (mismo flujo que useTiendaPedidos)
     const { data: pedidos, error } = await supabasePedidos
-      .from('pedidos')
+      .from('pedidos_auto_test')
       .select('*')
       .eq('fecha_creacion', fechaFiltro);
 
