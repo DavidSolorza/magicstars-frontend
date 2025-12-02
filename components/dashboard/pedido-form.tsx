@@ -435,8 +435,8 @@ export function PedidoForm({
                   onProductosChange(productos);
                   onFormDataChange({
                     ...formData,
-                    productos: productos.length > 0 
-                      ? productos.map((p) => `${p.nombre} x${p.cantidad}`).join(', ')
+                    productos: productos.length > 0
+                      ? productos.map((p) => `${p.cantidad} X ${p.nombre}`).join(', ')
                       : formData.productos, // Mantener el texto original si no hay productos parseados
                   });
                 }}

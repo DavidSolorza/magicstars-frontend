@@ -23,7 +23,7 @@ export const API_ENDPOINTS = {
   
   // Gestión de Pedidos
   ORDERS: {
-    UPDATE_PEDIDO: '/webhook/actualizar-pedido',
+    UPDATE_PEDIDO: '/webhook/actualizar-pedido-new',
     ADD_EDIT_CONFIRM_PEDIDO_ASESOR: '/webhook/add-edit-confirm-pedido-asesor',
   },
   
@@ -43,7 +43,7 @@ export const API_ENDPOINTS = {
   ROUTES: {
     GENERAR_RUTAS: '/webhook/generar_rutas',
     ASIGNAR_PEDIDO_INDIVIDUAL: '/webhook/Asignar-Pedido-Individual-Nuevo',
-    REASIGNAR_PEDIDOS_MENSAJERO: '/webhook/reasignar-pedidos-de-un-mensajero-a-otro',
+    REASIGNAR_PEDIDOS_MENSAJERO: '/webhook/reasignar-pedidos-de-un-mensajero-a-otro-new',
   },
 
   // Gestión de Inventario

@@ -718,7 +718,7 @@ export default function AdminRoutesPage() {
 
   // Filtrar usuarios por mensajeros que tienen pedidos hoy
   users
-    .filter(u => u.role === 'mensajero' && u.isActive && messengersWithOrdersToday.has(u.name))
+    .filter(u => (u.role === 'mensajero' || u.role === 'mensajero-lider') && u.isActive && messengersWithOrdersToday.has(u.name))
     .forEach(messenger => {
       if (!messengersMap.has(messenger.name)) {
         messengersMap.set(messenger.name, messenger);
@@ -729,7 +729,7 @@ export default function AdminRoutesPage() {
   // Obtener TODOS los mensajeros activos del sistema (para reasignación)
   const allMessengersMap = new Map<string, User>();
   users
-    .filter(u => u.role === 'mensajero' && u.isActive)
+    .filter(u => (u.role === 'mensajero' || u.role === 'mensajero-lider') && u.isActive)
     .forEach(messenger => {
       if (!allMessengersMap.has(messenger.name)) {
         allMessengersMap.set(messenger.name, messenger);

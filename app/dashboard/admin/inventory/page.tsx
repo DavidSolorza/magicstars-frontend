@@ -269,10 +269,10 @@ export default function AdminInventoryPage() {
       console.log('═══════════════════════════════════════════════════════════');
       
       // Para edición, siempre usar el nombre original del producto
-      const nombreParaWebhook = isEditing 
+      const nombreParaWebhook = isEditing
         ? editingProduct!.producto.trim() // Usar el nombre original, no se puede editar
         : productData.producto.trim(); // Para nuevo producto
-      
+
       const payload = {
         producto: nombreParaWebhook,
         cantidad: productData.cantidad || 0,
@@ -892,11 +892,11 @@ export default function AdminInventoryPage() {
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => handleOpenStockAdjust(item)}
+                              onClick={() => handleEditProduct(item)}
                               className="h-8 w-8 p-0"
-                              title="Ajustar stock y configurar alertas"
+                              title="Editar producto"
                             >
-                              <ArrowUpDown className="h-4 w-4 text-muted-foreground hover:text-primary" />
+                              <Edit className="h-4 w-4 text-muted-foreground hover:text-primary" />
                             </Button>
                             <Button
                               variant="ghost"

@@ -777,16 +777,85 @@ export default function AsesorDashboard() {
     setShowViewModal(true);
   };
 
+  // Función para validar campos obligatorios antes de confirmar
+  const validarCamposObligatorios = (order: Order): { isValid: boolean; errores: string[] } => {
+    const errores: string[] = [];
+    const orderData = order as any;
+
+    // Validar nombre del cliente
+    if (!order.customerName?.trim()) {
+      errores.push('Nombre del cliente');
+    }
+
+    // Validar teléfono del cliente
+    if (!order.customerPhone?.trim()) {
+      errores.push('Teléfono del cliente');
+    }
+
+    // Validar dirección
+    if (!order.customerAddress?.trim()) {
+      errores.push('Dirección');
+    }
+
+    // Validar provincia
+    if (!order.customerProvince?.trim()) {
+      errores.push('Provincia');
+    }
+
+    // Validar cantón
+    if (!order.customerCanton?.trim()) {
+      errores.push('Cantón');
+    }
+
+    // Validar distrito
+    if (!order.customerDistrict?.trim()) {
+      errores.push('Distrito');
+    }
+
+    // Validar productos
+    const productos = orderData.productos || '';
+    if (!productos.trim()) {
+      errores.push('Productos');
+    }
+
+    // Validar que no haya productos no mapeados (con paréntesis)
+    if (productos && /\([^)]+\)/.test(productos)) {
+      errores.push('Hay productos sin asignar (con paréntesis)');
+    }
+
+    // Validar valor total
+    const valorTotal = order.totalAmount || 0;
+    if (valorTotal <= 0) {
+      errores.push('Valor total debe ser mayor a 0');
+    }
+
+    return {
+      isValid: errores.length === 0,
+      errores,
+    };
+  };
+
   // Función para confirmar pedido
   const confirmarPedido = async () => {
     if (!orderToView) return;
-    
+
+    // Validar campos obligatorios
+    const validacion = validarCamposObligatorios(orderToView);
+    if (!validacion.isValid) {
+      toast({
+        title: '⚠️ Campos obligatorios faltantes',
+        description: `Por favor complete: ${validacion.errores.join(', ')}`,
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setIsConfirming(true);
     try {
       const updates = {
         confirmado: true,
       };
-      
+
       const ok = await updatePedidoPreconfirmacion(orderToView.id, updates);
       
       if (ok) {
@@ -842,24 +911,49 @@ export default function AsesorDashboard() {
   // Función para parsear productos con stock del inventario
   const parsearProductosConStock = (productosStr: string): { nombre: string; stock: number; cantidad: number }[] => {
     const productosParsed: { nombre: string; stock: number; cantidad: number }[] = [];
-    if (productosStr && productosDisponibles.length > 0) {
-      const productosArray = productosStr.split(',').map((p: string) => p.trim());
-      productosArray.forEach((prod: string) => {
-        const match = prod.match(/(.+?)\s*x(\d+)/);
-        if (match) {
-          const nombreProducto = match[1].trim();
-          // Buscar el producto en productosDisponibles para obtener el stock real
-          const productoDisponible = productosDisponibles.find(p => 
-            p.producto.toLowerCase().trim() === nombreProducto.toLowerCase().trim()
-          );
-          productosParsed.push({
-            nombre: nombreProducto,
-            cantidad: parseInt(match[2]),
-            stock: productoDisponible?.cantidad || 0, // Obtener stock real del inventario (cantidad)
-          });
-        }
+    if (!productosStr) return productosParsed;
+
+    const productosArray = productosStr.split(',').map((p: string) => p.trim());
+    productosArray.forEach((prod: string) => {
+      if (!prod) return;
+
+      let nombreProducto = '';
+      let cantidad = 1;
+
+      // Formato 1: "2 X NOMBRE" o "2X NOMBRE" (cantidad al inicio)
+      const matchCantidadInicio = prod.match(/^(\d+)\s*[xX]\s+(.+)$/);
+      // Formato 2: "NOMBRE x2" o "NOMBRE X2" (cantidad al final)
+      const matchCantidadFinal = prod.match(/^(.+?)\s*[xX](\d+)$/);
+
+      if (matchCantidadInicio) {
+        cantidad = parseInt(matchCantidadInicio[1]);
+        nombreProducto = matchCantidadInicio[2].trim();
+      } else if (matchCantidadFinal) {
+        nombreProducto = matchCantidadFinal[1].trim();
+        cantidad = parseInt(matchCantidadFinal[2]);
+      } else {
+        // Si no hay formato de cantidad, asumir cantidad 1
+        nombreProducto = prod.trim();
+        cantidad = 1;
+      }
+
+      // Saltar productos con paréntesis (no mapeados)
+      if (/\([^)]+\)/.test(nombreProducto)) {
+        return;
+      }
+
+      // Buscar el producto en productosDisponibles para obtener el stock real
+      const productoDisponible = productosDisponibles.find(p =>
+        p.producto.toLowerCase().trim() === nombreProducto.toLowerCase().trim()
+      );
+
+      productosParsed.push({
+        nombre: nombreProducto,
+        cantidad: cantidad,
+        stock: productoDisponible?.cantidad || 0,
       });
-    }
+    });
+
     return productosParsed;
   };
 

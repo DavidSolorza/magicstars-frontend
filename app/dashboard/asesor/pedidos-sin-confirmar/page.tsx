@@ -15,17 +15,19 @@ import { Calendar, Search, Package, Clock, CheckCircle, AlertCircle, Edit, Save,
 import { CardDescription } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { Loader2 } from 'lucide-react';
-import { 
-  getAllPedidosByTiendaPreconfirmacion, 
+import {
+  getAllPedidosByTiendaPreconfirmacion,
   getPedidosCountByTiendaPreconfirmacion,
   getTotalPedidosPreconfirmacionCount,
-  updatePedidoPreconfirmacion 
+  updatePedidoPreconfirmacion
 } from '@/lib/supabase-pedidos';
+import { obtenerTodosProductosALLSTARS, ProductoInventario } from '@/lib/supabase-inventario';
 import { Order } from '@/lib/types';
 import { toast } from 'sonner';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { DateRange } from 'react-day-picker';
+import { ProductosSelector } from '@/components/dashboard/productos-selector';
 
 // Función para obtener la tienda del asesor (igual que en dashboard)
 const getAsesorTienda = (email: string): string => {
@@ -78,8 +80,14 @@ export default function PedidosSinConfirmarPage() {
   const [editingCanton, setEditingCanton] = useState<string>('');
   const [editingDistrict, setEditingDistrict] = useState<string>('');
   const [editingProductos, setEditingProductos] = useState<string>('');
+  const [editingProductosSeleccionados, setEditingProductosSeleccionados] = useState<{ nombre: string; stock: number; cantidad: number }[]>([]);
   const [editingPrice, setEditingPrice] = useState<number>(0);
-  
+  const [hasUnmappedProducts, setHasUnmappedProducts] = useState<boolean>(false);
+  const [unmappedProductsList, setUnmappedProductsList] = useState<string[]>([]);
+
+  // Estado para productos disponibles del inventario
+  const [productosDisponibles, setProductosDisponibles] = useState<ProductoInventario[]>([]);
+
   const [isUpdating, setIsUpdating] = useState(false);
   const [asesorTienda, setAsesorTienda] = useState<string>('ALL STARS');
   
@@ -176,6 +184,90 @@ export default function PedidosSinConfirmarPage() {
     }
   }, [user]);
 
+  // Cargar productos disponibles del inventario
+  useEffect(() => {
+    const loadProductos = async () => {
+      try {
+        const productos = await obtenerTodosProductosALLSTARS();
+        setProductosDisponibles(productos);
+        console.log('📦 Productos disponibles cargados:', productos.length);
+      } catch (error) {
+        console.error('❌ Error al cargar productos:', error);
+      }
+    };
+    loadProductos();
+  }, []);
+
+  // Función para detectar productos con paréntesis (no mapeados)
+  const detectarProductosNoMapeados = (productosStr: string): string[] => {
+    if (!productosStr) return [];
+    const productosArray = productosStr.split(',').map(p => p.trim());
+    const noMapeados: string[] = [];
+
+    productosArray.forEach(prod => {
+      // Detectar si contiene paréntesis (formato: "1 X PRODUCTO (algo)")
+      if (/\([^)]+\)/.test(prod)) {
+        noMapeados.push(prod);
+      }
+    });
+
+    return noMapeados;
+  };
+
+  // Función para parsear productos con stock del inventario
+  const parsearProductosConStock = (productosStr: string): { nombre: string; stock: number; cantidad: number }[] => {
+    const productosParsed: { nombre: string; stock: number; cantidad: number }[] = [];
+    if (!productosStr) return productosParsed;
+
+    const productosArray = productosStr.split(',').map(p => p.trim());
+    productosArray.forEach(prod => {
+      if (!prod) return;
+
+      let nombreProducto = '';
+      let cantidad = 1;
+
+      // Formato 1: "2 X NOMBRE" o "2X NOMBRE" (cantidad al inicio)
+      const matchCantidadInicio = prod.match(/^(\d+)\s*[xX]\s+(.+)$/);
+      // Formato 2: "NOMBRE x2" o "NOMBRE X2" (cantidad al final)
+      const matchCantidadFinal = prod.match(/^(.+?)\s*[xX](\d+)$/);
+
+      if (matchCantidadInicio) {
+        cantidad = parseInt(matchCantidadInicio[1]);
+        nombreProducto = matchCantidadInicio[2].trim();
+      } else if (matchCantidadFinal) {
+        nombreProducto = matchCantidadFinal[1].trim();
+        cantidad = parseInt(matchCantidadFinal[2]);
+      } else {
+        // Si no hay formato de cantidad, asumir cantidad 1 y el texto completo es el nombre
+        nombreProducto = prod.trim();
+        cantidad = 1;
+      }
+
+      // Saltar productos con paréntesis (no mapeados)
+      if (/\([^)]+\)/.test(nombreProducto)) {
+        return;
+      }
+
+      // Buscar el producto en productosDisponibles para obtener el stock real
+      const productoDisponible = productosDisponibles.find(p =>
+        p.producto.toLowerCase().trim() === nombreProducto.toLowerCase().trim()
+      );
+
+      productosParsed.push({
+        nombre: nombreProducto,
+        cantidad: cantidad,
+        stock: productoDisponible?.cantidad || 0,
+      });
+    });
+
+    return productosParsed;
+  };
+
+  // Función para convertir productos seleccionados a string
+  const productosSeleccionadosAString = (productos: { nombre: string; cantidad: number }[]): string => {
+    return productos.map(p => `${p.cantidad} X ${p.nombre}`).join(', ');
+  };
+
   // Filtrar pedidos (igual que en dashboard)
   useEffect(() => {
     console.log('🔄 Filtrando pedidos...', { 
@@ -254,6 +346,21 @@ export default function PedidosSinConfirmarPage() {
 
   // Función para manejar la edición
   const handleEdit = (order: Order) => {
+    const productosStr = order.productos || '';
+
+    // Detectar productos no mapeados (con paréntesis)
+    const noMapeados = detectarProductosNoMapeados(productosStr);
+    setUnmappedProductsList(noMapeados);
+    setHasUnmappedProducts(noMapeados.length > 0);
+
+    // Si no hay productos no mapeados, parsear productos
+    if (noMapeados.length === 0) {
+      const productosParsed = parsearProductosConStock(productosStr);
+      setEditingProductosSeleccionados(productosParsed);
+    } else {
+      setEditingProductosSeleccionados([]);
+    }
+
     setEditingOrder(order.id);
     setEditingStatus(order.status);
     setEditingPaymentMethod(order.paymentMethod);
@@ -264,9 +371,20 @@ export default function PedidosSinConfirmarPage() {
     setEditingProvince(order.customerProvince || '');
     setEditingCanton(order.customerCanton || '');
     setEditingDistrict(order.customerDistrict || '');
-    setEditingProductos(order.productos || '');
+    setEditingProductos(productosStr);
     setEditingPrice(order.totalAmount || 0);
   };
+
+  // Re-parsear productos cuando productosDisponibles se carga (para actualizar stock)
+  useEffect(() => {
+    if (editingOrder && editingProductos && productosDisponibles.length > 0 && !hasUnmappedProducts) {
+      const productosParsed = parsearProductosConStock(editingProductos);
+      if (productosParsed.length > 0) {
+        setEditingProductosSeleccionados(productosParsed);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [productosDisponibles.length]);
 
   // Función para cancelar edición
   const handleCancelEdit = () => {
@@ -281,18 +399,30 @@ export default function PedidosSinConfirmarPage() {
     setEditingCanton('');
     setEditingDistrict('');
     setEditingProductos('');
+    setEditingProductosSeleccionados([]);
     setEditingPrice(0);
+    setHasUnmappedProducts(false);
+    setUnmappedProductsList([]);
   };
 
   // Función para guardar cambios
   const handleSaveEdit = async () => {
     if (!editingOrder) return;
 
+    // No permitir guardar si hay productos no mapeados
+    if (hasUnmappedProducts) {
+      toast.error('No se puede guardar: hay productos sin asignar');
+      return;
+    }
+
     try {
       setIsUpdating(true);
-      
+
       const orderToUpdate = orders.find(o => o.id === editingOrder);
       if (!orderToUpdate) return;
+
+      // Convertir productos seleccionados a string
+      const productosString = productosSeleccionadosAString(editingProductosSeleccionados);
 
       // Actualizar todos los campos editables
       await updatePedidoPreconfirmacion(editingOrder, {
@@ -303,17 +433,17 @@ export default function PedidosSinConfirmarPage() {
         canton: editingCanton,
         distrito: editingDistrict,
         valor_total: editingPrice,
-        productos: editingProductos,
+        productos: productosString,
         estado_pedido: editingStatus,
         metodo_pago: editingPaymentMethod,
         confirmado: editingConfirmado,
       });
 
       // Actualizar el estado local
-      setOrders(prev => prev.map(order => 
-        order.id === editingOrder 
-          ? { 
-              ...order, 
+      setOrders(prev => prev.map(order =>
+        order.id === editingOrder
+          ? {
+              ...order,
               status: editingStatus as any,
               paymentMethod: editingPaymentMethod as any,
               confirmado: editingConfirmado,
@@ -323,7 +453,7 @@ export default function PedidosSinConfirmarPage() {
               customerProvince: editingProvince,
               customerCanton: editingCanton,
               customerDistrict: editingDistrict,
-              productos: editingProductos,
+              productos: productosString,
               totalAmount: editingPrice
             }
           : order
@@ -984,12 +1114,43 @@ export default function PedidosSinConfirmarPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Productos</Label>
-                <Textarea
-                  value={editingProductos}
-                  onChange={(e) => setEditingProductos(e.target.value)}
-                  placeholder="Productos del pedido"
-                  rows={3}
-                />
+                {hasUnmappedProducts ? (
+                  <div className="p-3 rounded-lg border border-amber-300 bg-amber-50">
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
+                      <div className="space-y-2">
+                        <p className="text-sm font-medium text-amber-800">
+                          Productos sin asignar detectados
+                        </p>
+                        <p className="text-xs text-amber-700">
+                          Este pedido contiene productos que no han sido mapeados.
+                          Debes ir a la sección de &quot;Productos no encontrados&quot; y asignarlos antes de poder editar este pedido.
+                        </p>
+                        <div className="mt-2 space-y-1">
+                          {unmappedProductsList.map((prod, idx) => (
+                            <Badge
+                              key={idx}
+                              variant="outline"
+                              className="bg-amber-100 text-amber-800 border-amber-300 text-xs"
+                            >
+                              {prod}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <ProductosSelector
+                    productos={editingProductosSeleccionados}
+                    productosDisponibles={productosDisponibles}
+                    onProductosChange={(productos) => {
+                      setEditingProductosSeleccionados(productos);
+                      // También actualizar el string para mantener sincronizado
+                      setEditingProductos(productosSeleccionadosAString(productos));
+                    }}
+                  />
+                )}
               </div>
 
               <div className="space-y-2">
@@ -999,6 +1160,7 @@ export default function PedidosSinConfirmarPage() {
                   value={editingPrice}
                   onChange={(e) => setEditingPrice(Number(e.target.value))}
                   placeholder="Precio total"
+                  disabled={hasUnmappedProducts}
                 />
               </div>
             </div>
@@ -1056,10 +1218,19 @@ export default function PedidosSinConfirmarPage() {
             <div className="flex gap-2 pt-4">
               <Button
                 onClick={handleSaveEdit}
-                disabled={isUpdating}
+                disabled={isUpdating || hasUnmappedProducts}
                 className="flex-1"
               >
-                {isUpdating ? 'Guardando...' : 'Guardar'}
+                {isUpdating ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Guardando...
+                  </>
+                ) : hasUnmappedProducts ? (
+                  'Asigne productos primero'
+                ) : (
+                  'Guardar'
+                )}
               </Button>
               <Button
                 variant="outline"
